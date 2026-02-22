@@ -1,0 +1,24 @@
+[
+  {
+    "userId": "1be3d4be-1c86-46d5-bf20-76bdbe678e86",
+    "displayName": "zahar",
+    "friendCode": "L29S49VD",
+    "friends": [
+      "53794a5c-df95-45a9-9184-fd7eb641bfcc"
+    ]
+  },
+  {
+    "userId": "a5a28bab-527f-4e72-b8d7-bb370606e733",
+    "displayName": "Player-421",
+    "friendCode": "3T2K7B2Z",
+    "friends": []
+  },
+  {
+    "userId": "53794a5c-df95-45a9-9184-fd7eb641bfcc",
+    "displayName": "Player-5361",
+    "friendCode": "4B7TCYZV",
+    "friends": [
+      "1be3d4be-1c86-46d5-bf20-76bdbe678e86"
+    ]
+  }
+]

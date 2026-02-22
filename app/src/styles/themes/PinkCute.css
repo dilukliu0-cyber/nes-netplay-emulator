@@ -1,0 +1,23 @@
+:root[data-theme="pink"] {
+  --WindowBackground: var(--bg-window);
+  --PanelBackground: var(--bg-panel);
+  --CardBackground: var(--bg-card);
+  --BorderBrush: var(--border);
+  --TextPrimary: var(--text-primary);
+  --TextSecondary: var(--text-secondary);
+  --Accent: var(--accent);
+  --AccentHover: color-mix(in srgb, var(--accent) 88%, white 12%);
+  --AccentPressed: color-mix(in srgb, var(--accent) 92%, black 8%);
+  --FocusBrush: var(--accent);
+  --SelectionBrush: rgba(239, 118, 177, 0.22);
+  --Danger: color-mix(in srgb, var(--text-primary) 88%, #7a2f52 12%);
+  --Success: color-mix(in srgb, var(--bg-card) 90%, white 10%);
+  --Info: color-mix(in srgb, var(--bg-panel) 90%, white 10%);
+  --TextOnAccent: #ffffff;
+  --app-bg: var(--bg-window);
+  --panel: var(--bg-panel);
+  --panel-2: var(--bg-card);
+  --accent: var(--accent);
+  --border: color-mix(in srgb, var(--border) 72%, transparent);
+  --border-strong: color-mix(in srgb, var(--border) 74%, var(--text-primary) 26%);
+}

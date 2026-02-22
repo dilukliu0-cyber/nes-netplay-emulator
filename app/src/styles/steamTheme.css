@@ -1,0 +1,108 @@
+@import "./themes/SteamDark.css";
+@import "./themes/PinkCute.css";
+
+:root {
+  --WindowBackground: #0b121b;
+  --PanelBackground: #0f1a24;
+  --CardBackground: #121f2b;
+  --BorderBrush: #223246;
+  --TextPrimary: #e6eef7;
+  --TextSecondary: #a9b7c6;
+  --Accent: #2d79ff;
+  --AccentHover: #4a8cff;
+  --AccentPressed: #1f5fe0;
+  --FocusBrush: #2d79ff;
+  --SelectionBrush: #2d79ff;
+  --Danger: #e04646;
+  --Success: #3ddc97;
+  --Info: #4cc3ff;
+  --TextOnAccent: #ffffff;
+
+  --app-bg: var(--WindowBackground);
+  --app-bg-2: var(--WindowBackground);
+  --panel: var(--PanelBackground);
+  --panel-2: var(--CardBackground);
+  --panel-3: color-mix(in srgb, var(--CardBackground) 82%, var(--PanelBackground) 18%);
+  --border: var(--BorderBrush);
+  --border-strong: color-mix(in srgb, var(--BorderBrush) 74%, white 26%);
+  --text: var(--TextPrimary);
+  --text-muted: var(--TextSecondary);
+  --accent: var(--Accent);
+  --accent-soft: color-mix(in srgb, var(--Accent) 26%, transparent);
+  --accent-hover: var(--AccentHover);
+  --accent-pressed: var(--AccentPressed);
+  --accent-border: color-mix(in srgb, var(--Accent) 62%, white 38%);
+  --focus-brush: color-mix(in srgb, var(--FocusBrush) 48%, transparent);
+  --selection-brush: color-mix(in srgb, var(--SelectionBrush) 24%, transparent);
+  --text-on-accent: var(--TextOnAccent);
+  --ghost-hover: color-mix(in srgb, var(--AccentHover) 20%, transparent);
+  --ok: var(--Success);
+  --danger: var(--Danger);
+
+  --radius-sm: 14px;
+  --radius-md: 18px;
+  --shadow-large: 0 10px 28px color-mix(in srgb, var(--TextPrimary) 14%, transparent);
+  --shadow-card: 0 8px 20px color-mix(in srgb, var(--TextPrimary) 12%, transparent);
+  --shadow-button: 0 6px 16px color-mix(in srgb, var(--TextPrimary) 12%, transparent);
+  --shadow-input: 0 5px 14px color-mix(in srgb, var(--TextPrimary) 12%, transparent);
+  --shadow-soft: var(--shadow-large);
+  --shadow-panel: var(--shadow-card);
+  --font-ui: "Segoe UI Variable", "Segoe UI", Inter, Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  color: var(--text);
+  font-family: var(--font-ui);
+  background: var(--app-bg);
+}
+
+body {
+  position: relative;
+  overflow: hidden;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: transparent;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 1px solid var(--focus-brush);
+  outline-offset: 1px;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: color-mix(in srgb, var(--panel-3) 86%, var(--panel) 14%);
+}
+
+*::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--text-muted) 36%, transparent);
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}

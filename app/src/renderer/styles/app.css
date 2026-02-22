@@ -1,0 +1,755 @@
+html, body, #app, #root {
+  background: var(--bg-window);
+  color: rgba(var(--text-primary-rgb), 0.96);
+  font-family: "Segoe UI", system-ui, sans-serif;
+}
+
+.container-panel,
+.profile-panel,
+.library-panel,
+.topbar,
+.hero-card,
+.tabs-card,
+.settings-modal,
+.friends-panel,
+.network-current,
+.tab-content,
+.control-row,
+.friend-line,
+.friend-code-tile,
+.room-member-item,
+.overflow-menu-item {
+  background: var(--bg-panel);
+  border: 1px solid rgba(var(--border-rgb), var(--border-op));
+  border-radius: var(--r-container);
+  box-shadow: var(--shadow-big);
+}
+
+.card,
+.ui-card,
+.stat-card,
+.content-card,
+input,
+textarea,
+select,
+.ui-input,
+.settings-grid select,
+.settings-grid input[type="text"],
+.settings-grid input[type="number"],
+.library-item,
+.ui-list-item,
+.telegram-chat-input input,
+.library-search-input {
+  background: var(--bg-card);
+  border: 1px solid rgba(var(--border-rgb), var(--border-op));
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow-card);
+  color: rgba(var(--text-primary-rgb), 0.96);
+}
+
+.dark-bar,
+.game-progress,
+.weird-black-line {
+  background: rgba(var(--border-rgb), 0.55) !important;
+}
+
+button {
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: var(--r-btn);
+  border: 1px solid transparent;
+  background-image: none !important;
+  filter: none !important;
+  box-shadow: none;
+  cursor: pointer;
+  user-select: none;
+  transition: background 120ms ease, transform 80ms ease;
+}
+
+:root[data-theme="pink"] button[data-action="settings-open"] {
+  height: 36px;
+  padding: 8px 16px;
+  background: #FDD3E6;
+  color: #B04A78;
+  border-color: #F4BADD;
+  box-shadow: var(--shadow-sec);
+}
+:root[data-theme="pink"] button[data-action="settings-open"]:hover { background: #FCD4E6; }
+:root[data-theme="pink"] button[data-action="settings-open"]:active { background: #F8C8DF; transform: translateY(1px); }
+
+:root[data-theme="pink"] button[data-action="play"] {
+  height: 44px;
+  padding: 10px 18px;
+  background: #EF7CAD;
+  color: #FBE8F3;
+  border-color: #CF5F8F;
+  box-shadow: var(--shadow-btn);
+}
+:root[data-theme="pink"] button[data-action="play"]:hover { background: #F08AB6; }
+:root[data-theme="pink"] button[data-action="play"]:active { background: #E871A4; transform: translateY(1px); }
+
+:root[data-theme="pink"] button[data-action="add-game"] {
+  height: 44px;
+  padding: 10px 18px;
+  background: #EF7FB0;
+  color: #FEE9F5;
+  border-color: #D96F9F;
+  box-shadow: var(--shadow-btn);
+}
+:root[data-theme="pink"] button[data-action="add-game"]:hover { background: #F08DB8; }
+:root[data-theme="pink"] button[data-action="add-game"]:active { background: #E978A9; transform: translateY(1px); }
+
+:root[data-theme="pink"] .bottom-tab {
+  height: 40px;
+  padding: 8px 18px;
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  font-weight: 400;
+  color: #C76895;
+}
+:root[data-theme="pink"] .bottom-tab.active {
+  background: #E38EBC;
+  color: #FDE4F1;
+  border: 1px solid #D881AE;
+  box-shadow: 0 6px 16px rgba(var(--shadow-rgb), 0.10);
+  font-weight: 600;
+}
+
+:root[data-theme="pink"] button[data-variant="soft"] {
+  height: 36px;
+  padding: 8px 16px;
+  background: var(--bg-card);
+  color: rgba(var(--text-primary-rgb), 0.90);
+  border-color: rgba(var(--border-rgb), var(--border-op));
+  box-shadow: var(--shadow-sec);
+}
+:root[data-theme="pink"] button[data-variant="soft"]:hover { background: var(--bg-panel); }
+:root[data-theme="pink"] button[data-variant="soft"]:active { background: rgba(var(--border-rgb), 0.35); transform: translateY(1px); }
+
+:root[data-theme="pink"] button[data-variant="ghost"] {
+  height: 36px;
+  padding: 8px 12px;
+  background: transparent;
+  color: rgba(var(--text-primary-rgb), 0.78);
+  border-color: transparent;
+  box-shadow: none;
+}
+:root[data-theme="pink"] button[data-variant="ghost"]:hover {
+  background: rgba(241,148,200,0.45);
+  border-color: rgba(var(--border-rgb), 0.35);
+}
+
+:root[data-theme="pink"] button[data-variant="danger"] {
+  height: 36px;
+  padding: 8px 16px;
+  background: var(--text-primary);
+  color: #FFFFFF;
+  border-color: rgba(var(--border-rgb), var(--border-op));
+  box-shadow: var(--shadow-sec);
+}
+:root[data-theme="pink"] button[data-variant="danger"]:hover { background: rgba(var(--text-primary-rgb), 0.88); }
+:root[data-theme="pink"] button[data-variant="danger"]:active { background: rgba(var(--text-primary-rgb), 0.78); transform: translateY(1px); }
+
+:root[data-theme="pink"] button:disabled {
+  cursor: default;
+  background: rgba(var(--border-rgb), 0.52);
+  color: rgba(var(--text-secondary-rgb), 0.95);
+  box-shadow: var(--shadow-sec);
+}
+
+/* Pixel tuning for pink reference */
+:root[data-theme="pink"] body {
+  background: linear-gradient(180deg, #eca7c3 0%, #e8a3c1 100%);
+}
+
+:root[data-theme="pink"] body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(860px 280px at 84% 100%, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0) 72%),
+    radial-gradient(500px 220px at 8% 94%, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0) 70%);
+}
+
+:root[data-theme="pink"] .app-shell.steam-layout {
+  gap: 12px;
+  padding: 10px;
+  grid-template-columns: minmax(328px, 352px) minmax(0, 1fr);
+  background: transparent;
+}
+
+:root[data-theme="pink"] .steam-sidebar,
+:root[data-theme="pink"] .steam-main,
+:root[data-theme="pink"] .game-column {
+  gap: 12px;
+}
+
+:root[data-theme="pink"] .profile-panel,
+:root[data-theme="pink"] .library-panel,
+:root[data-theme="pink"] .topbar,
+:root[data-theme="pink"] .hero-card,
+:root[data-theme="pink"] .tabs-card {
+  border-width: 1.5px;
+  border-color: rgba(var(--border-rgb), 0.66);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), 0 6px 14px rgba(var(--shadow-rgb), 0.11);
+}
+
+:root[data-theme="pink"] .library-search-input {
+  width: 100%;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+:root[data-theme="pink"] .library-thumb-wrap {
+  display: block;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+}
+
+:root[data-theme="pink"] .library-item {
+  background: #fccce3;
+  border-color: transparent;
+  box-shadow: none;
+  justify-content: flex-start;
+}
+
+:root[data-theme="pink"] .library-item::before {
+  content: none;
+}
+
+:root[data-theme="pink"] .library-item.ui-list-item--active {
+  background: #EAA2C3;
+  border: 1px solid #E394BB;
+}
+
+:root[data-theme="pink"] .library-thumb {
+  border-radius: 8px;
+  border: 1px solid #F1B3D6;
+}
+
+:root[data-theme="pink"] .library-thumb.placeholder {
+  background: #EC9EC3;
+  color: #FAD8EA;
+  font-size: 12px;
+  border-radius: 8px;
+  border: 1px solid #E292BA;
+}
+
+:root[data-theme="pink"] .topbar-title,
+:root[data-theme="pink"] .profile-main strong,
+:root[data-theme="pink"] .library-title,
+:root[data-theme="pink"] .hero-meta h1,
+:root[data-theme="pink"] .tabs-card .ui-tab.ui-tab--active,
+:root[data-theme="pink"] .stat-card strong {
+  color: #BB4472;
+}
+
+:root[data-theme="pink"] .status-row,
+:root[data-theme="pink"] .tabs-card .ui-tab,
+:root[data-theme="pink"] .stat-card span,
+:root[data-theme="pink"] .tab-content p,
+:root[data-theme="pink"] .network-line {
+  color: #CD739E;
+}
+
+:root[data-theme="pink"] .hero-meta h1 {
+  color: #C55688;
+}
+
+:root[data-theme="pink"] .tabs-card .ui-tab {
+  opacity: 1;
+}
+
+:root[data-theme="pink"] .tab-content {
+  color: #D07CA7;
+}
+
+:root[data-theme="pink"] .hero-card {
+  grid-template-columns: minmax(320px, 40%) minmax(0, 1fr);
+  padding: 12px;
+  border-radius: 18px;
+}
+
+:root[data-theme="pink"] .hero-meta h1 {
+  color: rgba(var(--text-primary-rgb), 0.96);
+}
+
+:root[data-theme="pink"] .stat-card {
+  background: linear-gradient(180deg, #E695C1, #E492BD);
+}
+
+:root[data-theme="pink"] .tab-content {
+  background: linear-gradient(180deg, #F9BFE1, #F7C1E1);
+}
+
+@media (max-width: 1100px) {
+  :root[data-theme="pink"] .app-shell.steam-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Final 1:1 polish for buttons/text/radius */
+:root[data-theme="pink"] .topbar-title {
+  color: #c05f8f;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+:root[data-theme="pink"] .profile-main strong {
+  color: #bd4f7f;
+  font-size: 22px;
+}
+
+:root[data-theme="pink"] .status-row,
+:root[data-theme="pink"] .profile-code-inline code {
+  color: #ce7da8;
+}
+
+:root[data-theme="pink"] .library-title {
+  color: #be5a89;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+:root[data-theme="pink"] .hero-meta h1 {
+  color: #bf5787;
+  font-size: 46px;
+  line-height: 52px;
+}
+
+:root[data-theme="pink"] .stat-card span,
+:root[data-theme="pink"] .tab-content p,
+:root[data-theme="pink"] .network-line,
+:root[data-theme="pink"] .friend-line-main span,
+:root[data-theme="pink"] .netplay-status-line,
+:root[data-theme="pink"] .overflow-menu-text {
+  color: #cc77a3;
+}
+
+:root[data-theme="pink"] .stat-card strong,
+:root[data-theme="pink"] .friend-line-main strong,
+:root[data-theme="pink"] .overflow-menu-title {
+  color: #ba4f80;
+}
+
+:root[data-theme="pink"] button[data-action="settings-open"] {
+  min-width: 136px;
+  height: 36px;
+  border-radius: 18px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+:root[data-theme="pink"] .play-btn,
+:root[data-theme="pink"] button[data-action="play"] {
+  min-width: 160px;
+  height: 44px;
+  border-radius: 16px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+:root[data-theme="pink"] .library-action-btn,
+:root[data-theme="pink"] button[data-action="add-game"] {
+  height: 44px;
+  border-radius: 16px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+:root[data-theme="pink"] .profile-copy-mini {
+  height: 34px;
+  border-radius: 11px;
+  font-size: 13px;
+}
+
+:root[data-theme="pink"] .tabs-card .ui-tabs {
+  gap: 14px;
+}
+
+:root[data-theme="pink"] .tabs-card .ui-tab {
+  border-radius: 12px 12px 0 0;
+  padding: 0 14px 6px;
+  color: #cb79a3;
+}
+
+:root[data-theme="pink"] .tabs-card .ui-tab.ui-tab--active {
+  color: #bc4e80;
+}
+
+:root[data-theme="pink"] .network-panel .ui-card,
+:root[data-theme="pink"] .network-current,
+:root[data-theme="pink"] .network-chat-card,
+:root[data-theme="pink"] .friends-tab-panel,
+:root[data-theme="pink"] .friends-list,
+:root[data-theme="pink"] .friend-line,
+:root[data-theme="pink"] .friend-add-row .ui-input,
+:root[data-theme="pink"] .telegram-chat-list,
+:root[data-theme="pink"] .telegram-chat-input input,
+:root[data-theme="pink"] .netplay-ellipsis-btn,
+:root[data-theme="pink"] .overflow-menu,
+:root[data-theme="pink"] .overflow-menu-item,
+:root[data-theme="pink"] .room-member-item,
+:root[data-theme="pink"] .room-chat-list {
+  border-radius: 16px;
+}
+
+:root[data-theme="pink"] .network-current,
+:root[data-theme="pink"] .network-chat-card,
+:root[data-theme="pink"] .friends-tab-panel,
+:root[data-theme="pink"] .telegram-chat-list,
+:root[data-theme="pink"] .overflow-menu,
+:root[data-theme="pink"] .overflow-menu-item {
+  border-color: #efb0d3;
+}
+
+:root[data-theme="pink"] .netplay-ellipsis-btn {
+  background: #fbcde4;
+  color: #b55483;
+  border-color: #efb0d3;
+}
+
+/* Contrast + radius final pass */
+:root[data-theme="pink"] .hero-meta h1,
+:root[data-theme="pink"] .topbar-title,
+:root[data-theme="pink"] .profile-main strong,
+:root[data-theme="pink"] .library-title,
+:root[data-theme="pink"] .tabs-card .ui-tab.ui-tab--active,
+:root[data-theme="pink"] .stat-card strong {
+  color: #b44675;
+  opacity: 1;
+}
+
+:root[data-theme="pink"] .status-row,
+:root[data-theme="pink"] .profile-code-inline code,
+:root[data-theme="pink"] .tabs-card .ui-tab,
+:root[data-theme="pink"] .stat-card span,
+:root[data-theme="pink"] .tab-content p,
+:root[data-theme="pink"] .network-line,
+:root[data-theme="pink"] .friend-line-main span,
+:root[data-theme="pink"] .netplay-status-line,
+:root[data-theme="pink"] .overflow-menu-text,
+:root[data-theme="pink"] .room-member-main span {
+  color: #c35b8d;
+  opacity: 1;
+}
+
+:root[data-theme="pink"] .library-item,
+:root[data-theme="pink"] .library-item .library-title,
+:root[data-theme="pink"] .library-item.ui-list-item--active .library-title {
+  color: #b44a78;
+  opacity: 1;
+}
+
+:root[data-theme="pink"] .play-btn,
+:root[data-theme="pink"] button[data-action="play"],
+:root[data-theme="pink"] .library-action-btn,
+:root[data-theme="pink"] button[data-action="add-game"] {
+  color: #ffeaf5;
+  text-shadow: 0 1px 0 rgba(140, 38, 84, 0.25);
+}
+
+:root[data-theme="pink"] button[data-action="settings-open"],
+:root[data-theme="pink"] .profile-copy-mini,
+:root[data-theme="pink"] button[data-variant="soft"] {
+  color: #b64a79;
+}
+
+:root[data-theme="pink"] .network-panel,
+:root[data-theme="pink"] .friends-tab-panel,
+:root[data-theme="pink"] .network-chat-card,
+:root[data-theme="pink"] .network-current,
+:root[data-theme="pink"] .tabs-card,
+:root[data-theme="pink"] .tab-content,
+:root[data-theme="pink"] .telegram-chat,
+:root[data-theme="pink"] .telegram-chat-list,
+:root[data-theme="pink"] .telegram-chat-input input,
+:root[data-theme="pink"] .friend-line,
+:root[data-theme="pink"] .friends-list,
+:root[data-theme="pink"] .overflow-menu,
+:root[data-theme="pink"] .overflow-menu-item,
+:root[data-theme="pink"] .room-member-item,
+:root[data-theme="pink"] .room-chat-list {
+  border-radius: 18px;
+}
+
+/* Bow PNGs from rofs */
+:root[data-theme="pink"] .ui-button.with-bow::after {
+  width: 16px;
+  height: 16px;
+  opacity: 1;
+  background: url("../../assets/bows/rofs.png") no-repeat;
+  background-size: 220% 220%;
+  background-position: 16% 18%;
+  mask: none;
+  -webkit-mask: none;
+}
+
+:root[data-theme="pink"] .hero-card::after {
+  width: 30px;
+  height: 24px;
+  right: 12px;
+  bottom: 10px;
+  opacity: 0.96;
+  background: url("../../assets/bows/rofs.png") no-repeat;
+  background-size: 220% 220%;
+  background-position: 14% 16%;
+  background-color: transparent;
+  mask: none;
+  -webkit-mask: none;
+}
+
+:root[data-theme="pink"] .tabs-card::after {
+  width: 30px;
+  height: 24px;
+  right: 12px;
+  bottom: 10px;
+  opacity: 0.96;
+  background: url("../../assets/bows/rofs.png") no-repeat;
+  background-size: 220% 220%;
+  background-position: 62% 16%;
+  background-color: transparent;
+  mask: none;
+  -webkit-mask: none;
+}
+
+:root[data-theme="pink"] .library-panel::after {
+  content: "";
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  width: 30px;
+  height: 24px;
+  opacity: 0.96;
+  pointer-events: none;
+  background: url("../../assets/bows/rofs.png") no-repeat;
+  background-size: 220% 220%;
+  background-position: 62% 62%;
+}
+
+/* Sakura particles from png (cropped) */
+:root[data-theme="pink"] .library-panel::before,
+:root[data-theme="pink"] .hero-card::before,
+:root[data-theme="pink"] .tabs-card::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 44%;
+  pointer-events: none;
+  opacity: 0.22;
+  background-color: transparent;
+  mask: none;
+  -webkit-mask: none;
+}
+
+:root[data-theme="pink"] .library-panel::before {
+  background: url("../../assets/sakura/sakura_left.png") no-repeat left bottom / cover;
+}
+
+:root[data-theme="pink"] .hero-card::before {
+  background: url("../../assets/sakura/sakura_right.png") no-repeat right bottom / cover;
+}
+
+:root[data-theme="pink"] .tabs-card::before {
+  background: url("../../assets/sakura/sakura_strip.png") no-repeat center bottom / cover;
+}
+
+:root[data-theme="pink"] .library-action-btn,
+:root[data-theme="pink"] .play-btn,
+:root[data-theme="pink"] button[data-action="settings-open"],
+:root[data-theme="pink"] .tabs-card .ui-tab.ui-tab--active,
+:root[data-theme="pink"] .topbar-title,
+:root[data-theme="pink"] .hero-meta h1,
+:root[data-theme="pink"] .profile-main strong {
+  font-weight: 800;
+}
+
+/* Stronger text weights/contrast + online glow */
+:root[data-theme="pink"] .profile-main strong,
+:root[data-theme="pink"] .hero-meta h1,
+:root[data-theme="pink"] .topbar-title,
+:root[data-theme="pink"] .library-title,
+:root[data-theme="pink"] .stat-card strong,
+:root[data-theme="pink"] .tabs-card .ui-tab.ui-tab--active,
+:root[data-theme="pink"] .ui-section-header h3 {
+  font-weight: 700;
+}
+
+:root[data-theme="pink"] .status-row,
+:root[data-theme="pink"] .profile-code-inline code,
+:root[data-theme="pink"] .stat-card span,
+:root[data-theme="pink"] .tab-content p,
+:root[data-theme="pink"] .network-line,
+:root[data-theme="pink"] .library-item,
+:root[data-theme="pink"] .tabs-card .ui-tab,
+:root[data-theme="pink"] .room-member-main span {
+  font-weight: 600;
+}
+
+:root[data-theme="pink"] .status-dot {
+  background: #4fe08d;
+  box-shadow: 0 0 0 2px rgba(79, 224, 141, 0.2), 0 0 10px rgba(79, 224, 141, 0.95);
+}
+
+:root[data-theme="pink"] .status-row span:nth-child(2) {
+  color: #33cf7b;
+  text-shadow: 0 0 8px rgba(79, 224, 141, 0.55);
+}
+
+/* Green replacement for old steam theme */
+:root[data-theme="blue"] body {
+  background: #1f4631;
+}
+
+:root[data-theme="blue"] body::before {
+  content: none;
+}
+
+:root[data-theme="blue"] body::after {
+  content: none;
+}
+
+:root[data-theme="blue"] .app-shell.steam-layout {
+  background: transparent;
+  gap: 12px;
+  padding: 10px;
+  grid-template-columns: minmax(352px, 385px) minmax(0, 1fr);
+}
+
+:root[data-theme="blue"] .profile-panel,
+:root[data-theme="blue"] .library-panel,
+:root[data-theme="blue"] .topbar,
+:root[data-theme="blue"] .hero-card,
+:root[data-theme="blue"] .tabs-card,
+:root[data-theme="blue"] .tab-content,
+:root[data-theme="blue"] .network-current,
+:root[data-theme="blue"] .friend-line,
+:root[data-theme="blue"] .network-chat-card {
+  border-color: rgba(95, 141, 98, 0.88);
+  background: linear-gradient(180deg, rgba(41, 85, 58, 0.94), rgba(30, 64, 44, 0.95));
+  border-radius: 15px;
+  box-shadow:
+    inset 0 1px 0 rgba(167, 214, 167, 0.24),
+    inset 0 -1px 0 rgba(7, 18, 11, 0.38),
+    0 10px 20px rgba(9, 21, 14, 0.46);
+}
+
+:root[data-theme="blue"] .topbar-title,
+:root[data-theme="blue"] .hero-meta h1,
+:root[data-theme="blue"] .profile-main strong,
+:root[data-theme="blue"] .library-title,
+:root[data-theme="blue"] .stat-card strong,
+:root[data-theme="blue"] .tabs-card .ui-tab.ui-tab--active {
+  color: #8fbb79;
+  font-weight: 700;
+  text-shadow: 0 1px 0 rgba(7, 18, 11, 0.45);
+}
+
+:root[data-theme="blue"] .hero-meta h1 {
+  font-size: 63px;
+  line-height: 1.02;
+}
+
+:root[data-theme="blue"] .status-row,
+:root[data-theme="blue"] .profile-code-inline code,
+:root[data-theme="blue"] .stat-card span,
+:root[data-theme="blue"] .tab-content p,
+:root[data-theme="blue"] .network-line,
+:root[data-theme="blue"] .tabs-card .ui-tab,
+:root[data-theme="blue"] .netplay-status-line {
+  color: #81a972;
+}
+
+:root[data-theme="blue"] .status-dot {
+  background: #6ad66d;
+  box-shadow: 0 0 0 2px rgba(106, 214, 109, 0.26), 0 0 12px rgba(106, 214, 109, 0.95);
+}
+
+:root[data-theme="blue"] .ui-input,
+:root[data-theme="blue"] .library-search-input,
+:root[data-theme="blue"] .telegram-chat-input input {
+  background: rgba(27, 62, 42, 0.92);
+  border-color: rgba(105, 146, 106, 0.74);
+  color: #9bc286;
+  box-shadow: inset 0 1px 0 rgba(156, 206, 154, 0.12);
+}
+
+:root[data-theme="blue"] button[data-action="settings-open"] {
+  background: linear-gradient(180deg, #2f6143, #274f37);
+  color: #96c37f;
+  border-color: #638f67;
+  border-radius: 14px;
+  box-shadow: inset 0 1px 0 rgba(170, 216, 166, 0.21), 0 6px 12px rgba(9, 18, 12, 0.35);
+}
+
+:root[data-theme="blue"] button[data-action="play"] {
+  background: linear-gradient(180deg, #639758, #4f7f47);
+  color: #dcedd2;
+  border-color: #85b375;
+  border-radius: 16px;
+  box-shadow: inset 0 1px 0 rgba(206, 235, 193, 0.28), 0 7px 12px rgba(8, 17, 11, 0.38);
+}
+
+:root[data-theme="blue"] button[data-action="add-game"] {
+  background: linear-gradient(180deg, #619457, #4f7b47);
+  color: #deecd4;
+  border-color: #85b375;
+  border-radius: 16px;
+  box-shadow: inset 0 1px 0 rgba(207, 235, 194, 0.27), 0 7px 12px rgba(8, 17, 11, 0.38);
+}
+
+:root[data-theme="blue"] .bottom-tab.active {
+  background: #3d6e4b;
+  color: #a5cc8f;
+  border-color: #67956e;
+  box-shadow: inset 0 1px 0 rgba(174, 216, 167, 0.2);
+}
+
+:root[data-theme="blue"] .tabs-card .ui-tabs {
+  border-bottom-color: rgba(104, 148, 106, 0.72);
+}
+
+:root[data-theme="blue"] .tabs-card .ui-tab {
+  height: 34px;
+  border-radius: 11px 11px 0 0;
+  padding: 0 14px 6px;
+}
+
+:root[data-theme="blue"] .tabs-card .ui-tab.ui-tab--active {
+  background: rgba(72, 125, 77, 0.62);
+  border: 1px solid rgba(120, 171, 109, 0.8);
+  border-bottom-color: transparent;
+  color: #9fca87;
+}
+
+:root[data-theme="blue"] .library-item {
+  border-radius: 6px;
+  background: rgba(30, 64, 44, 0.88);
+  box-shadow: inset 0 1px 0 rgba(144, 193, 146, 0.08);
+}
+
+:root[data-theme="blue"] .library-item.ui-list-item--active {
+  background: rgba(74, 124, 79, 0.66);
+  border-color: rgba(126, 174, 112, 0.9);
+  box-shadow: inset 0 1px 0 rgba(183, 222, 173, 0.16);
+}
+
+:root[data-theme="blue"] .library-thumb.placeholder {
+  background: #3f6f4b;
+  color: #c0dcb2;
+  border-color: #6d9b72;
+}
+
+:root[data-theme="blue"] .library-panel::before,
+:root[data-theme="blue"] .library-panel::after,
+:root[data-theme="blue"] .hero-card::after,
+:root[data-theme="blue"] .tabs-card::before {
+  content: none;
+}
+
+

@@ -1,0 +1,100 @@
+{
+  "name": "nes-netplay-emulator-app",
+  "version": "1.0.1",
+  "description": "NES emulator with online netplay support",
+  "author": "dilukliu0-cyber",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dilukliu0-cyber/nes-netplay-emulator.git"
+  },
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "dev": "concurrently -k \"npm:dev:renderer\" \"npm:dev:electron\"",
+    "dev:renderer": "vite",
+    "dev:electron": "concurrently -k \"npm:dev:electron:tsc\" \"npm:dev:electron:run\"",
+    "dev:electron:tsc": "node ./node_modules/typescript/bin/tsc -p tsconfig.electron.json --watch",
+    "dev:electron:run": "wait-on tcp:5173 dist-electron/main.js && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron --disable-logging --log-level=3 dist-electron/main.js",
+    "build": "node ./node_modules/typescript/bin/tsc -p tsconfig.json && vite build && node ./node_modules/typescript/bin/tsc -p tsconfig.electron.json",
+    "dist": "npm run build && electron-builder",
+    "dist:win": "node scripts/dist-win.mjs",
+    "dist:one": "npm run dist:portable && node scripts/update-root-exe.mjs",
+    "dist:portable": "node scripts/prepare-dist.mjs && npm run build && electron-builder --win portable --config.npmRebuild=false --config.win.signAndEditExecutable=false",
+    "dist:mac": "npm run build && electron-builder --mac dmg --config.npmRebuild=false --config.mac.identity=null",
+    "dist:mac:dir": "npm run build && electron-builder --mac dir --config.npmRebuild=false --config.mac.identity=null",
+    "release:mac": "npm run build && electron-builder --mac dmg zip --publish always --config.npmRebuild=false",
+    "bump:version": "node scripts/bump-version.mjs",
+    "release:win": "npm run bump:version && npm run dist:one",
+    "release:github": "node scripts/prepare-dist.mjs && npm run build && electron-builder --win nsis --publish always --config.npmRebuild=false --config.win.signAndEditExecutable=false"
+  },
+  "dependencies": {
+    "electron-updater": "^6.6.2",
+    "jsnes": "^1.2.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "snes9x-next": "^1.0.0",
+    "uuid": "^11.1.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@types/uuid": "^10.0.0",
+    "@types/ws": "^8.18.1",
+    "@vitejs/plugin-react": "^4.4.1",
+    "concurrently": "^9.1.2",
+    "cross-env": "^7.0.3",
+    "electron": "^34.0.0",
+    "electron-builder": "^25.1.8",
+    "png-to-ico": "^3.0.1",
+    "typescript": "^5.7.3",
+    "vite": "^6.0.5",
+    "wait-on": "^8.0.1"
+  },
+  "build": {
+    "appId": "com.mvp.nesnetplay",
+    "productName": "NES Emulator 1.01",
+    "artifactName": "NES Emulator Setup ${version}.${ext}",
+    "files": [
+      "dist/renderer/**/*",
+      "dist-electron/**/*",
+      "package.json"
+    ],
+    "extraMetadata": {
+      "displayVersion": "1.01"
+    },
+    "directories": {
+      "buildResources": "build"
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.games",
+      "icon": "build/icon.png"
+    },
+    "win": {
+      "target": "nsis",
+      "executableName": "NES Emulator 1.01",
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": true,
+      "allowToChangeInstallationDirectory": false,
+      "perMachine": false,
+      "differentialPackage": false,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "dilukliu0-cyber",
+        "repo": "nes-netplay-emulator",
+        "releaseType": "release"
+      }
+    ]
+  }
+}

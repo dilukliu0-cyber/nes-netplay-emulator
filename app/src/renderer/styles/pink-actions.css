@@ -1,0 +1,176 @@
+/* =========================
+   PINK - точные цвета кнопок как на референсе
+   (Electron / CSS)
+   ========================= */
+
+:root[data-theme="pink"] {
+  /* базовые фоны (как в рефе) */
+  --bg-window: #FAD4EA;
+  --bg-panel:  #FABADF;
+  --bg-card:   #F194C8;
+
+  --border: #C687AA;
+  --border-rgb: 198, 135, 170;
+
+  --text-primary: #B44785;
+  --text-primary-rgb: 180, 71, 133;
+
+  --text-secondary: #C687AA;
+  --text-secondary-rgb: 198, 135, 170;
+
+  /* тени (как на рефе: НЕ чёрные) */
+  --shadow-rgb: 180, 71, 133; /* #B44785 */
+  --shadow-btn: 0 6px 16px rgba(var(--shadow-rgb), 0.12);
+  --shadow-sec: 0 5px 14px rgba(var(--shadow-rgb), 0.10);
+
+  --r-btn: 12px;
+  --r-card: 14px;
+  --r-container: 18px;
+}
+
+/* глобально: запрет градиентов на кнопках */
+:root[data-theme="pink"] button {
+  font-family: "Segoe UI", system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: var(--r-btn);
+  border: 1px solid transparent;
+  background-image: none !important;
+  filter: none !important;
+  cursor: pointer;
+  user-select: none;
+  transition: background 120ms ease, transform 80ms ease;
+}
+
+/* =========================
+   ТОЧНЫЕ КНОПКИ ИЗ РЕФЕРЕНСА
+   ========================= */
+
+/* Настройки (реф): светлая плашка */
+:root[data-theme="pink"] button[data-action="settings-open"]{
+  height: 36px;
+  padding: 8px 16px;
+
+  background: #EBAAC9;
+  color: #C97199;
+  border-color: #EEA6C2;
+
+  box-shadow: var(--shadow-sec);
+}
+:root[data-theme="pink"] button[data-action="settings-open"]:hover{
+  background: #FACCE1;
+}
+:root[data-theme="pink"] button[data-action="settings-open"]:active{
+  transform: translateY(1px);
+  background: #F1B1CA;
+}
+
+/* Играть (реф): основной розовый */
+:root[data-theme="pink"] button[data-action="play"]{
+  height: 44px;
+  padding: 10px 18px;
+
+  background: #F287B6;
+  color: #FDE5F3;
+  border-color: #D777A0;
+
+  box-shadow: var(--shadow-btn);
+}
+:root[data-theme="pink"] button[data-action="play"]:hover{
+  background: #F493BE;
+}
+:root[data-theme="pink"] button[data-action="play"]:active{
+  transform: translateY(1px);
+  background: #F188B7;
+}
+
+/* Добавить игру (реф): чуть другой оттенок */
+:root[data-theme="pink"] button[data-action="add-game"]{
+  height: 44px;
+  padding: 10px 18px;
+
+  background: #F28DBA;
+  color: #FEEAF6;
+  border-color: #E586AF;
+
+  box-shadow: var(--shadow-btn);
+}
+:root[data-theme="pink"] button[data-action="add-game"]:hover{
+  background: #F493BE;
+}
+:root[data-theme="pink"] button[data-action="add-game"]:active{
+  transform: translateY(1px);
+  background: #F188B7;
+}
+
+/* =========================
+   НИЖНИЕ ТАБЫ-ПИЛЮЛИ (как на рефе)
+   ========================= */
+:root[data-theme="pink"] .bottom-tab{
+  height: 40px;
+  padding: 8px 18px;
+
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+
+  color: #DA75A2;
+  font-weight: 400;
+}
+:root[data-theme="pink"] .bottom-tab.active{
+  background: #F59CC3;
+  color: #FEE6F4;
+  border: 1px solid #E586AF;
+  box-shadow: 0 6px 16px rgba(var(--shadow-rgb), 0.10);
+  font-weight: 600;
+}
+
+/* =========================
+   ОСТАЛЬНЫЕ КНОПКИ
+   ========================= */
+
+/* “Мягкая” вторичная кнопка (как плашка) */
+:root[data-theme="pink"] button[data-variant="soft"]{
+  height: 36px;
+  padding: 8px 16px;
+  background: var(--bg-card);
+  color: rgba(var(--text-primary-rgb), 0.90);
+  border-color: rgba(var(--border-rgb), 0.55);
+  box-shadow: var(--shadow-sec);
+}
+:root[data-theme="pink"] button[data-variant="soft"]:hover{ background: var(--bg-panel); }
+:root[data-theme="pink"] button[data-variant="soft"]:active{ transform: translateY(1px); background: rgba(var(--border-rgb), 0.35); }
+
+/* “Призрачная” иконка/…/лупа */
+:root[data-theme="pink"] button[data-variant="ghost"]{
+  height: 36px;
+  padding: 8px 12px;
+  background: transparent;
+  color: rgba(var(--text-primary-rgb), 0.78);
+  border-color: transparent;
+  box-shadow: none;
+}
+:root[data-theme="pink"] button[data-variant="ghost"]:hover{
+  background: rgba(241,148,200,0.45);
+  border-color: rgba(var(--border-rgb), 0.35);
+}
+
+/* Опасные */
+:root[data-theme="pink"] button[data-variant="danger"]{
+  height: 36px;
+  padding: 8px 16px;
+  background: var(--text-primary);
+  color: #FFFFFF;
+  border-color: rgba(var(--border-rgb), 0.55);
+  box-shadow: var(--shadow-sec);
+}
+:root[data-theme="pink"] button[data-variant="danger"]:hover{ background: rgba(var(--text-primary-rgb), 0.88); }
+:root[data-theme="pink"] button[data-variant="danger"]:active{ transform: translateY(1px); background: rgba(var(--text-primary-rgb), 0.78); }
+
+/* Disabled “в комнате” */
+:root[data-theme="pink"] button:disabled{
+  cursor: default;
+  background: rgba(var(--border-rgb), 0.35);
+  color: rgba(var(--text-secondary-rgb), 0.85);
+  box-shadow: none;
+}

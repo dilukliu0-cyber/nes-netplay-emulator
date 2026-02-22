@@ -1,0 +1,32 @@
+:root[data-theme="blue"] {
+  --bg-window: #1b3a2a;
+  --bg-panel: #244b35;
+  --bg-card: #2b5a3f;
+
+  --border: #5f8b69;
+  --border-rgb: 95, 139, 105;
+
+  --text-primary: #9cc089;
+  --text-primary-rgb: 156, 192, 137;
+
+  --text-secondary: #7fa36f;
+  --text-secondary-rgb: 127, 163, 111;
+
+  --accent: #4a7d4d;
+  --accent-hover: #5c9562;
+  --accent-pressed: #3f6d42;
+  --text-on-accent: #e6f2de;
+
+  --border-op: 0.55;
+  --button-border-op: 0.45;
+
+  --text-title-op: 0.90;
+  --text-body-op: 0.88;
+  --text-secondary-op: 0.85;
+
+  --shadow-color: 23, 47, 34;
+  --shadow-big-op: 0.14;
+  --shadow-card-op: 0.12;
+  --shadow-btn-op: 0.12;
+  --shadow-sec-op: 0.10;
+}

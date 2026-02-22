@@ -1,0 +1,20 @@
+:root[data-theme="blue"] {
+  --WindowBackground: var(--bg-window);
+  --PanelBackground: var(--bg-panel);
+  --CardBackground: var(--bg-card);
+  --BorderBrush: var(--border);
+  --TextPrimary: var(--text-primary);
+  --TextSecondary: var(--text-secondary);
+  --Accent: var(--accent);
+  --AccentHover: var(--accent-hover);
+  --AccentPressed: var(--accent-pressed);
+  --FocusBrush: var(--accent-hover);
+  --SelectionBrush: color-mix(in srgb, var(--accent) 40%, transparent);
+  --Danger: color-mix(in srgb, var(--accent) 70%, #3a5f3d 30%);
+  --Success: color-mix(in srgb, var(--accent) 58%, #8bc47a 42%);
+  --Info: color-mix(in srgb, var(--accent) 35%, #a2c98f 65%);
+  --app-bg: var(--bg-window);
+  --panel: var(--bg-panel);
+  --panel-2: var(--bg-card);
+  --accent: var(--accent);
+}

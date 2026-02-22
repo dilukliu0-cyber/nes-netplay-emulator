@@ -1,0 +1,30 @@
+:root[data-theme="pink"] {
+  /* backgrounds */
+  --bg-window: #eca7c3;
+  --bg-panel: #fdc7e4;
+  --bg-card: #f5b9d8;
+
+  /* borders / text */
+  --border: #f1add4;
+  --border-rgb: 241, 173, 212;
+
+  --text-primary: #c9689b;
+  --text-primary-rgb: 201, 104, 155;
+
+  --text-secondary: #d07aa9;
+  --text-secondary-rgb: 208, 122, 169;
+
+  /* shadows */
+  --shadow-rgb: 201, 104, 155;
+  --shadow-big: 0 10px 28px rgba(var(--shadow-rgb), 0.14);
+  --shadow-card: 0 8px 20px rgba(var(--shadow-rgb), 0.12);
+  --shadow-btn: 0 6px 16px rgba(var(--shadow-rgb), 0.12);
+  --shadow-sec: 0 5px 14px rgba(var(--shadow-rgb), 0.1);
+
+  --border-op: 0.55;
+  --btn-border-op: 0.45;
+
+  --r-container: 18px;
+  --r-card: 14px;
+  --r-btn: 12px;
+}

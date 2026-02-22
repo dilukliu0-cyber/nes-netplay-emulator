@@ -1,0 +1,245 @@
+.ui-button {
+  height: 44px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--CardBackground);
+  color: var(--text);
+  padding: 0 14px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease, transform 120ms ease;
+  position: relative;
+  box-shadow: var(--shadow-button);
+}
+
+.ui-button:hover {
+  border-color: var(--border-strong);
+  background: color-mix(in srgb, var(--CardBackground) 88%, var(--TextPrimary) 12%);
+}
+
+.ui-button:active {
+  transform: translateY(1px);
+}
+
+.ui-button--primary {
+  background: var(--accent);
+  border-color: color-mix(in srgb, var(--BorderBrush) 45%, transparent);
+  color: var(--text-on-accent);
+}
+
+.ui-button--primary:hover {
+  background: var(--accent-hover);
+}
+
+.ui-button--primary:active {
+  background: var(--accent-pressed);
+}
+
+.ui-button--secondary {
+  background: var(--CardBackground);
+  border-color: var(--border);
+  color: var(--text);
+  box-shadow: 0 5px 14px color-mix(in srgb, var(--TextPrimary) 10%, transparent);
+}
+
+.ui-button--secondary:hover {
+  background: color-mix(in srgb, var(--SelectionBrush) 16%, var(--CardBackground) 84%);
+}
+
+.ui-button--ghost {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.ui-button--ghost:hover {
+  background: color-mix(in srgb, var(--SelectionBrush) 18%, transparent);
+  border-color: color-mix(in srgb, var(--border) 60%, var(--accent) 40%);
+}
+
+.ui-button--danger {
+  background: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 62%, black 38%);
+  color: var(--text-on-accent);
+}
+
+.ui-button--danger:hover {
+  background: color-mix(in srgb, var(--danger) 85%, white 15%);
+}
+
+.ui-button--danger:active {
+  background: color-mix(in srgb, var(--danger) 86%, black 14%);
+}
+
+.ui-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.ui-button.with-bow {
+  padding-right: 36px;
+}
+
+.ui-button.with-bow::after {
+  content: "";
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  transform: translateY(-50%);
+  background: url("../../assets/bows/rofs.png") no-repeat;
+  background-size: 220% 220%;
+  background-position: 16% 18%;
+  opacity: 0;
+  pointer-events: none;
+}
+
+:root[data-theme="pink"] .ui-button.with-bow::after {
+  opacity: 1;
+}
+
+.ui-card {
+  background-color: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-panel);
+  position: relative;
+  overflow: hidden;
+}
+
+.ui-input-wrap {
+  position: relative;
+}
+
+.ui-input-icon {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.ui-input {
+  width: 100%;
+  height: 40px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--CardBackground);
+  color: var(--text);
+  padding: 0 12px;
+  box-shadow: var(--shadow-input);
+}
+
+.ui-input::placeholder {
+  color: color-mix(in srgb, var(--text-muted) 85%, var(--panel-2) 15%);
+}
+
+.ui-input--with-icon {
+  padding-left: 32px;
+}
+
+.ui-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--CardBackground) 74%, var(--accent) 26%);
+  color: color-mix(in srgb, var(--accent) 35%, white 65%);
+  font-size: 11px;
+  padding: 0 8px;
+}
+
+.ui-tabs {
+  display: flex;
+  gap: 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.ui-tab {
+  height: 36px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-muted);
+  border-bottom: 2px solid transparent;
+  padding: 0 2px 6px;
+  font-size: 14px;
+  font-weight: 400;
+  opacity: 0.85;
+}
+
+.ui-tab:hover {
+  color: color-mix(in srgb, var(--text) 75%, var(--accent) 25%);
+}
+
+.ui-tab--active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+  opacity: 0.9;
+}
+
+.ui-tab:focus-visible,
+.ui-button:focus-visible,
+.ui-input:focus-visible,
+.ui-list-item:focus-visible {
+  outline: 2px solid var(--focus-brush);
+  outline-offset: 1px;
+}
+
+.ui-section-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.ui-section-header h3 {
+  flex: 0 0 auto;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.ui-section-header-right {
+  margin-left: auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ui-list-item {
+  width: 100%;
+  border: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+  background: var(--CardBackground);
+  border-radius: 14px;
+  min-height: 44px;
+  text-align: left;
+  padding: 0 10px;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.ui-list-item:hover {
+  background: var(--selection-brush);
+  border-color: color-mix(in srgb, var(--border) 84%, var(--accent) 16%);
+}
+
+.ui-list-item--active {
+  background: var(--selection-brush);
+  border-color: var(--accent);
+}
