@@ -1,21 +1,28 @@
 # macOS Build + Online Setup
 
-This project cannot produce a macOS app (`.dmg` / `.app`) on Windows.  
-Build mac artifacts on a Mac machine.
+You cannot build signed macOS artifacts directly on Windows, but you can build them from this repo using GitHub Actions (`macos-latest` runner).
 
-## 1. Copy project to Mac
+## 1. Build macOS artifacts from GitHub
 
-Copy folder `nes-netplay-emulator` to your Mac.
+1. Push your latest changes to `main`.
+2. Open GitHub -> `Actions` -> `Build macOS App`.
+3. Click `Run workflow`.
+4. After success, open the run and download artifact `macos-build`.
 
-## 2. Install dependencies
+Output files:
+- `*.dmg`
+- `*.zip`
+
+## 2. Local macOS build (if you have a Mac)
 
 ```bash
-cd nes-netplay-emulator/server
+cd nes-netplay-emulator/app
 npm i
-
-cd ../app
-npm i
+npm run dist:mac
 ```
+
+Output file:
+- `app/dist/*.dmg`
 
 ## 3. Configure online server URL (important)
 
@@ -33,17 +40,7 @@ Notes:
 - Use `wss://` for internet/public use.
 - Do not use `ws://localhost:8787` if users connect from different devices.
 
-## 4. Build macOS app
-
-```bash
-cd nes-netplay-emulator/app
-npm run dist:mac
-```
-
-Output file:
-- `app/dist/*.dmg`
-
-## 5. Start signaling server
+## 4. Start signaling server
 
 On your server machine:
 
