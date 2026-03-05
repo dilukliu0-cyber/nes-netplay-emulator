@@ -1,6 +1,6 @@
 {
   "name": "nes-netplay-emulator-app",
-  "version": "3.69.0",
+  "version": "4.0.0",
   "description": "NES emulator with online netplay support",
   "author": "dilukliu0-cyber",
   "private": true,
@@ -56,8 +56,8 @@
   },
   "build": {
     "appId": "com.mvp.nesnetplay2",
-    "productName": "нес нетплей 3.69",
-    "artifactName": "нес нетплей 3.69 Setup ${version}.${ext}",
+    "productName": "nes netplay 4",
+    "artifactName": "nes netplay 4 Setup ${version}.${ext}",
     "files": [
       "dist/renderer/**/*",
       "dist-electron/**/*",
@@ -74,7 +74,7 @@
       }
     ],
     "extraMetadata": {
-      "displayVersion": "3.69"
+      "displayVersion": "4"
     },
     "directories": {
       "buildResources": "build"
@@ -89,7 +89,7 @@
     },
     "win": {
       "target": "nsis",
-      "executableName": "нес нетплей 3.69",
+      "executableName": "nes netplay 4",
       "icon": "build/icon.ico"
     },
     "nsis": {
