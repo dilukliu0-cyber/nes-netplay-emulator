@@ -137,7 +137,7 @@ function formatDisplayVersion(version) {
     return `${major}.${String(patch).padStart(2, "0")}`;
 }
 const appDisplayVersion = formatDisplayVersion(electron_1.app.getVersion());
-const appDisplayName = `NES Emulator ${appDisplayVersion}`;
+const appDisplayName = `NES Netplay 3 ${appDisplayVersion}`;
 function userDataPath(...parts) {
     return path.join(electron_1.app.getPath("userData"), ...parts);
 }

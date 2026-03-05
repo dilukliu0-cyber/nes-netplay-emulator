@@ -26,7 +26,7 @@ export function AppTopbar(props: {
   const { roomStatus, networkHealth, connectionState, onOpenSettings } = props;
   return (
     <Card className="topbar">
-      <span className="app-title topbar-title">NES Emulator 2</span>
+      <span className="app-title topbar-title">NES Netplay 3</span>
       <div className="topbar-network">
         <span className={`topbar-network-dot ${healthClass(networkHealth)}`} />
         <span className="topbar-network-text">{connectionLabel(connectionState)}</span>
