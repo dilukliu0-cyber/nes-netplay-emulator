@@ -1,6 +1,6 @@
 {
   "name": "nes-netplay-emulator-app",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "NES emulator with online netplay support",
   "author": "dilukliu0-cyber",
   "private": true,
@@ -74,7 +74,7 @@
       }
     ],
     "extraMetadata": {
-      "displayVersion": "3"
+      "displayVersion": "3.1"
     },
     "directories": {
       "buildResources": "build"
