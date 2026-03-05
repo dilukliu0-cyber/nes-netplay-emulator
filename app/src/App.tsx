@@ -1029,6 +1029,7 @@ function StreamClientView(props: {
       iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
     });
     let guestRemoteDescriptionSet = false;
+    let handshakeCompleted = false;
     const guestPendingCandidates: RTCIceCandidateInit[] = [];
 
     const flushGuestPendingCandidates = async () => {
@@ -1082,6 +1083,7 @@ function StreamClientView(props: {
             const answer = await pc.createAnswer();
             await pc.setLocalDescription(answer);
             netplay.social.sendStreamSignal(netplay.roomId, netplay.streamPeerUserId!, answer);
+            handshakeCompleted = true;
           })
           .catch(() => onToast("Failed to start stream"));
         return;
@@ -1097,9 +1099,20 @@ function StreamClientView(props: {
     });
 
     netplay.social.sendStreamSignal(netplay.roomId, netplay.streamPeerUserId, { type: "ready" });
+    const readyRetryId = window.setInterval(() => {
+      if (handshakeCompleted) {
+        return;
+      }
+      netplay.social.sendStreamSignal(netplay.roomId, netplay.streamPeerUserId!, { type: "ready" });
+    }, 1500);
+    const readyRetryStopId = window.setTimeout(() => {
+      window.clearInterval(readyRetryId);
+    }, 20000);
 
     return () => {
       netplay.social.onStreamSignal(() => undefined);
+      window.clearInterval(readyRetryId);
+      window.clearTimeout(readyRetryStopId);
       pc.close();
     };
   }, [netplay, onToast, onVisualReady]);
@@ -2421,10 +2434,6 @@ export default function App() {
     if (remoteRoom.session && remoteRoom.session.gameId !== game.id) {
       return { ok: false, reason: "В комнате уже запущена другая сессия" };
     }
-    const players = remoteRoom.members.filter((memberId) => !remoteRoom.spectators.includes(memberId));
-    if (networkSettings.netplayMode === "stream" && players.length !== 2) {
-      return { ok: false, reason: t("app.streamNeedsOneGuest") };
-    }
     return { ok: true, room: remoteRoom };
   };
 
@@ -2457,16 +2466,7 @@ export default function App() {
       applyRoomState(remoteRoom);
       const hostUserId = remoteRoom.hostUserId;
 
-      const isStreamMode = networkSettings.netplayMode === "stream";
-      const currentSpectators = remoteRoom.spectators || [];
-      const streamGuests = remoteRoom.members
-        .filter((memberId) => memberId !== profile.userId)
-        .filter((memberId) => !currentSpectators.includes(memberId));
-      const streamPeerUserId = streamGuests[0];
-      if (isStreamMode && streamGuests.length !== 1) {
-        setToast(t("app.streamNeedsOneGuest"));
-        return;
-      }
+      const requestedStreamMode = networkSettings.netplayMode === "stream";
       const session = await window.bridge.startLocalGame(selectedGame.id);
 
       setActiveSession({
@@ -2478,23 +2478,23 @@ export default function App() {
           localUserId: profile.userId,
           hostUserId,
           localPlayer: 1,
-          transport: isStreamMode ? "stream" : "lockstep",
-          streamPeerUserId
+          transport: "lockstep"
         }
       });
-      const started = isStreamMode
-        ? await social.startStream(roomId, selectedGame.id, selectedGame.name, selectedGame.platform).catch(() => false)
-        : await social.startNetplay(
-          roomId,
-          selectedGame.id,
-          selectedGame.name,
-          selectedGame.platform,
-          session.romBase64,
-          selectedGame.emulatorId,
-          selectedGame.sha256
-        ).catch(() => false);
+      if (requestedStreamMode) {
+        setToast("Stream mode временно отключен: запускаем стабильный lockstep.");
+      }
+      const started = await social.startNetplay(
+        roomId,
+        selectedGame.id,
+        selectedGame.name,
+        selectedGame.platform,
+        session.romBase64,
+        selectedGame.emulatorId,
+        selectedGame.sha256
+      ).catch(() => false);
       if (!started) {
-        setToast(isStreamMode ? t("app.failedStartStream") : t("app.failedStartNetplay"));
+        setToast(t("app.failedStartNetplay"));
       }
       return;
     }

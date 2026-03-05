@@ -56,8 +56,8 @@
   },
   "build": {
     "appId": "com.mvp.nesnetplay2",
-    "productName": "NES Netplay 3",
-    "artifactName": "NES Netplay 3 Setup ${version}.${ext}",
+    "productName": "3.online",
+    "artifactName": "3.online Setup ${version}.${ext}",
     "files": [
       "dist/renderer/**/*",
       "dist-electron/**/*",
@@ -89,7 +89,7 @@
     },
     "win": {
       "target": "nsis",
-      "executableName": "NES Netplay 3",
+      "executableName": "3.online",
       "icon": "build/icon.ico"
     },
     "nsis": {

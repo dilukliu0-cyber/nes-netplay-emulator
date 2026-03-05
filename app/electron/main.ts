@@ -232,7 +232,7 @@ const defaultUiSettings: UiSettings = {
   inviteSoundEnabled: true
 };
 
-const appDisplayName = "NES Netplay 3";
+const appDisplayName = "3.online";
 
 function userDataPath(...parts: string[]): string {
   return path.join(app.getPath("userData"), ...parts);

@@ -127,17 +127,7 @@ const defaultUiSettings = {
     retroAchievementsUsername: "",
     inviteSoundEnabled: true
 };
-function formatDisplayVersion(version) {
-    const [majorRaw, , patchRaw] = version.split(".");
-    const major = Number(majorRaw) || 1;
-    const patch = Number(patchRaw) || 0;
-    if (patch <= 0) {
-        return String(major);
-    }
-    return `${major}.${String(patch).padStart(2, "0")}`;
-}
-const appDisplayVersion = formatDisplayVersion(electron_1.app.getVersion());
-const appDisplayName = `NES Netplay 3 ${appDisplayVersion}`;
+const appDisplayName = "NES Netplay 3";
 function userDataPath(...parts) {
     return path.join(electron_1.app.getPath("userData"), ...parts);
 }
