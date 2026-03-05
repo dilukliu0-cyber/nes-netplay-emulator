@@ -1,6 +1,6 @@
 {
   "name": "nes-netplay-emulator-app",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "description": "NES emulator with online netplay support",
   "author": "dilukliu0-cyber",
   "private": true,
