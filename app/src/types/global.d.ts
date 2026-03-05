@@ -1,7 +1,6 @@
-export type Platform = "NES" | "SNES";
-export type EmulatorId = "nes" | "snes";
-export type ScaleMode = "2x" | "3x" | "4x" | "fit";
-export type PixelMode = "nearest" | "smooth";
+export type Platform = "NES" | "SNES" | "GB" | "GBA" | "MD";
+export type EmulatorId = "nes" | "snes" | "gb" | "gba" | "md";
+export type VideoFps = 30 | 60 | 120;
 export type ReplayQuality = "720p" | "1080p";
 export type ReplayFps = 30 | 60;
 export type ReplayFormat = "webm";
@@ -24,14 +23,8 @@ export interface AudioSettings {
 }
 
 export interface VideoSettings {
-  fullscreen: boolean;
-  scale: ScaleMode;
-  pixelMode: PixelMode;
-  crtEnabled: boolean;
-  scanlinesIntensity: number;
-  bloom: number;
-  vignette: boolean;
-  colorCorrection: boolean;
+  targetFps: VideoFps;
+  smoothing: boolean;
 }
 
 export interface ReplaySettings {
@@ -49,27 +42,13 @@ export interface NetworkSettings {
   netplayMode: "lockstep" | "stream";
 }
 
-export interface LocalSignalingServerStatus {
-  running: boolean;
-  pid?: number;
-  port: number;
-  url: string;
-  message?: string;
-}
-
-export interface NgrokTunnelStatus {
-  running: boolean;
-  pid?: number;
-  publicUrl?: string;
-  message?: string;
-}
-
 export interface UiSettings {
   controlPreset: "keyboard" | "gamepad";
   libraryShowPlatformBadges: boolean;
   libraryEmulatorFilter: "all" | EmulatorId;
-  theme: "blue" | "pink";
+  theme: "blue" | "pink" | "steam";
   retroAchievementsUsername: string;
+  inviteSoundEnabled: boolean;
 }
 
 export interface RetroApiKeyStatus {
@@ -154,6 +133,18 @@ export interface RoomState {
   spectators: string[];
   locked: boolean;
   readyByUserId: string[];
+  session?: {
+    mode: "lockstep" | "stream";
+    gameId: string;
+    gameName: string;
+    platform: string;
+    emulatorId?: string;
+    romHash?: string;
+    protocolVersion?: string;
+    coreVersion?: string;
+    romBase64?: string;
+    startedAt: string;
+  };
 }
 
 declare global {
@@ -193,12 +184,6 @@ declare global {
       saveReplaySettings(payload: Partial<ReplaySettings>): Promise<ReplaySettings>;
       getNetworkSettings(): Promise<NetworkSettings>;
       saveNetworkSettings(payload: Partial<NetworkSettings>): Promise<NetworkSettings>;
-      getLocalServerStatus(): Promise<LocalSignalingServerStatus>;
-      startLocalServer(signalingUrl?: string): Promise<LocalSignalingServerStatus>;
-      stopLocalServer(): Promise<LocalSignalingServerStatus>;
-      getNgrokStatus(): Promise<NgrokTunnelStatus>;
-      startNgrok(signalingUrl?: string): Promise<NgrokTunnelStatus>;
-      stopNgrok(): Promise<NgrokTunnelStatus>;
       getUiSettings(): Promise<UiSettings>;
       saveUiSettings(payload: Partial<UiSettings>): Promise<UiSettings>;
       getRaApiKeyStatus(): Promise<RetroApiKeyStatus>;

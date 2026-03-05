@@ -1,9 +1,8 @@
 import { contextBridge, ipcRenderer } from "electron";
 
-type Platform = "NES" | "SNES";
-type EmulatorId = "nes" | "snes";
-type ScaleMode = "2x" | "3x" | "4x" | "fit";
-type PixelMode = "nearest" | "smooth";
+type Platform = "NES" | "SNES" | "GB" | "GBA" | "MD";
+type EmulatorId = "nes" | "snes" | "gb" | "gba" | "md";
+type VideoFps = 30 | 60 | 120;
 type ReplayQuality = "720p" | "1080p";
 type ReplayFps = 30 | 60;
 type ReplayFormat = "webm";
@@ -26,14 +25,8 @@ interface AudioSettings {
 }
 
 interface VideoSettings {
-  fullscreen: boolean;
-  scale: ScaleMode;
-  pixelMode: PixelMode;
-  crtEnabled: boolean;
-  scanlinesIntensity: number;
-  bloom: number;
-  vignette: boolean;
-  colorCorrection: boolean;
+  targetFps: VideoFps;
+  smoothing: boolean;
 }
 
 interface ReplaySettings {
@@ -51,27 +44,13 @@ interface NetworkSettings {
   netplayMode: "lockstep" | "stream";
 }
 
-interface LocalSignalingServerStatus {
-  running: boolean;
-  pid?: number;
-  port: number;
-  url: string;
-  message?: string;
-}
-
-interface NgrokTunnelStatus {
-  running: boolean;
-  pid?: number;
-  publicUrl?: string;
-  message?: string;
-}
-
 interface UiSettings {
   controlPreset: "keyboard" | "gamepad";
   libraryShowPlatformBadges: boolean;
   libraryEmulatorFilter: "all" | EmulatorId;
-  theme: "blue" | "pink";
+  theme: "blue" | "pink" | "steam";
   retroAchievementsUsername: string;
+  inviteSoundEnabled: boolean;
 }
 
 interface RetroApiKeyStatus {
@@ -172,12 +151,6 @@ const bridge = {
   saveReplaySettings: (payload: Partial<ReplaySettings>): Promise<ReplaySettings> => ipcRenderer.invoke("settings:saveReplay", payload),
   getNetworkSettings: (): Promise<NetworkSettings> => ipcRenderer.invoke("settings:getNetwork"),
   saveNetworkSettings: (payload: Partial<NetworkSettings>): Promise<NetworkSettings> => ipcRenderer.invoke("settings:saveNetwork", payload),
-  getLocalServerStatus: (): Promise<LocalSignalingServerStatus> => ipcRenderer.invoke("network:getLocalServerStatus"),
-  startLocalServer: (signalingUrl?: string): Promise<LocalSignalingServerStatus> => ipcRenderer.invoke("network:startLocalServer", signalingUrl),
-  stopLocalServer: (): Promise<LocalSignalingServerStatus> => ipcRenderer.invoke("network:stopLocalServer"),
-  getNgrokStatus: (): Promise<NgrokTunnelStatus> => ipcRenderer.invoke("network:getNgrokStatus"),
-  startNgrok: (signalingUrl?: string): Promise<NgrokTunnelStatus> => ipcRenderer.invoke("network:startNgrok", signalingUrl),
-  stopNgrok: (): Promise<NgrokTunnelStatus> => ipcRenderer.invoke("network:stopNgrok"),
   getUiSettings: (): Promise<UiSettings> => ipcRenderer.invoke("settings:getUi"),
   saveUiSettings: (payload: Partial<UiSettings>): Promise<UiSettings> => ipcRenderer.invoke("settings:saveUi", payload),
   getRaApiKeyStatus: (): Promise<RetroApiKeyStatus> => ipcRenderer.invoke("settings:getRaApiKeyStatus"),

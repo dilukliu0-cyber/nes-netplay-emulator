@@ -3,7 +3,13 @@ import type { EmulatorId } from "./types";
 const extToEmulator: Record<string, EmulatorId> = {
   ".nes": "nes",
   ".sfc": "snes",
-  ".smc": "snes"
+  ".smc": "snes",
+  ".gb": "gb",
+  ".gbc": "gb",
+  ".gba": "gba",
+  ".md": "md",
+  ".gen": "md",
+  ".bin": "md"
 };
 
 export function normalizeExt(ext: string): string {

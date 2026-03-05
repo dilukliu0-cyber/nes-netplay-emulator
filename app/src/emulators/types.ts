@@ -1,4 +1,4 @@
-export type EmulatorId = "nes" | "snes";
+export type EmulatorId = "nes" | "snes" | "gb" | "gba" | "md";
 
 export type InputState = {
   up: boolean;

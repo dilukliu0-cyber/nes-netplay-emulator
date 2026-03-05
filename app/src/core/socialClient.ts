@@ -1,6 +1,7 @@
 ﻿import type { FriendItem, InvitePayload, Profile, RoomState } from "../types/global";
 
 type Handler<T> = (payload: T) => void;
+export type SocialConnectionState = "connecting" | "connected" | "reconnecting" | "disconnected";
 
 interface WsResponse {
   type: "response";
@@ -41,6 +42,7 @@ interface StreamStartPayload {
   gameId: string;
   gameName?: string;
   platform?: string;
+  emulatorId?: string;
   hostUserId: string;
 }
 
@@ -71,6 +73,11 @@ interface RoomKickedPayload {
   byUserId: string;
 }
 
+interface SessionStopPayload {
+  roomId: string;
+  byUserId: string;
+}
+
 interface RoomChatPayload {
   id: string;
   roomId: string;
@@ -82,9 +89,16 @@ interface RoomChatPayload {
 
 export class SocialClient {
   private ws: WebSocket | null = null;
+  private connectPromise: Promise<void> | null = null;
   private profile: Profile;
   private getUrl?: () => string;
-  private pending = new Map<string, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
+  private manualClose = false;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private reconnectAttempt = 0;
+  private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  private outboundQueue: Array<{ type: string; payload: Record<string, unknown>; requestId?: string }> = [];
+  private readonly maxOutboundQueueSize = 512;
+  private pending = new Map<string, { resolve: (v: unknown) => void; reject: (e: Error) => void; timeoutId?: ReturnType<typeof setTimeout> }>();
   private friendsHandler: Handler<FriendItem[]> | null = null;
   private inviteHandler: Handler<InvitePayload> | null = null;
   private presenceHandler: Handler<{ userId: string; online: boolean; roomId?: string; inGame?: boolean; gameId?: string; gameName?: string; avatarDataUrl?: string }> | null = null;
@@ -97,7 +111,10 @@ export class SocialClient {
   private roomUpdateHandler: Handler<RoomState> | null = null;
   private roomClosedHandler: Handler<RoomClosedPayload> | null = null;
   private roomKickedHandler: Handler<RoomKickedPayload> | null = null;
+  private sessionStopHandler: Handler<SessionStopPayload> | null = null;
   private roomChatHandler: Handler<RoomChatPayload> | null = null;
+  private connectionStateHandler: Handler<SocialConnectionState> | null = null;
+  private lastConnectionState: SocialConnectionState = "disconnected";
 
   constructor(profile: Profile, getUrl?: () => string) {
     this.profile = profile;
@@ -107,11 +124,24 @@ export class SocialClient {
   private rejectAllPending(error: Error): void {
     for (const [requestId, entry] of this.pending.entries()) {
       this.pending.delete(requestId);
+      if (entry.timeoutId) {
+        clearTimeout(entry.timeoutId);
+      }
       entry.reject(error);
     }
   }
 
   close(): void {
+    this.manualClose = true;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
+    this.connectPromise = null;
     try {
       this.ws?.close();
     } catch {
@@ -119,11 +149,17 @@ export class SocialClient {
     }
     this.rejectAllPending(new Error("Connection closed"));
     this.ws = null;
+    this.emitConnectionState("disconnected");
   }
 
   updateProfile(profile: Profile): void {
+    const shouldReconnect = !this.manualClose;
     this.profile = profile;
     this.close();
+    if (shouldReconnect) {
+      this.manualClose = false;
+      void this.connect().catch(() => undefined);
+    }
   }
 
   onFriends(handler: Handler<FriendItem[]>): void {
@@ -174,18 +210,32 @@ export class SocialClient {
     this.roomKickedHandler = handler;
   }
 
+  onSessionStop(handler: Handler<SessionStopPayload>): void {
+    this.sessionStopHandler = handler;
+  }
+
   onRoomChat(handler: Handler<RoomChatPayload>): void {
     this.roomChatHandler = handler;
   }
 
+  onConnectionState(handler: Handler<SocialConnectionState>): void {
+    this.connectionStateHandler = handler;
+    this.connectionStateHandler(this.lastConnectionState);
+  }
+
   async connect(): Promise<void> {
+    this.manualClose = false;
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       return;
     }
+    if (this.connectPromise) {
+      return this.connectPromise;
+    }
 
     const url = this.getUrl?.() || (import.meta.env.VITE_SIGNALING_URL as string | undefined) || "ws://localhost:8787";
+    this.emitConnectionState(this.reconnectAttempt > 0 ? "reconnecting" : "connecting");
 
-    await new Promise<void>((resolve, reject) => {
+    this.connectPromise = new Promise<void>((resolve, reject) => {
       const ws = new WebSocket(url);
       this.ws = ws;
       let settled = false;
@@ -200,7 +250,9 @@ export class SocialClient {
         } catch {
           // noop
         }
-        this.ws = null;
+        if (this.ws === ws) {
+          this.ws = null;
+        }
         reject(error);
       };
 
@@ -225,24 +277,52 @@ export class SocialClient {
           reject: (error) => {
             clearTimeout(timeoutId);
             fail(error);
-          }
+          },
+          timeoutId
         });
 
-        this.send("auth", {
-          userId: this.profile.userId,
-          displayName: this.profile.displayName,
-          friendCode: this.profile.friendCode,
-          avatarDataUrl: this.profile.avatarDataUrl
-        }, requestId);
+        try {
+          ws.send(
+            JSON.stringify({
+              type: "auth",
+              requestId,
+              payload: {
+                userId: this.profile.userId,
+                displayName: this.profile.displayName,
+                friendCode: this.profile.friendCode,
+                avatarDataUrl: this.profile.avatarDataUrl
+              }
+            })
+          );
+        } catch {
+          fail(new Error("Failed to send auth request"));
+        }
       };
 
       ws.onerror = () => fail(new Error("Failed to connect to signaling server"));
       ws.onclose = () => {
+        if (this.ws !== ws) {
+          return;
+        }
         this.rejectAllPending(new Error("Signaling connection closed"));
+        if (this.heartbeatTimer) {
+          clearInterval(this.heartbeatTimer);
+          this.heartbeatTimer = null;
+        }
         this.ws = null;
+        this.connectPromise = null;
+        if (!this.manualClose) {
+          this.emitConnectionState("reconnecting");
+          this.scheduleReconnect();
+        } else {
+          this.emitConnectionState("disconnected");
+        }
       };
 
       ws.onmessage = (event) => {
+        if (this.ws !== ws) {
+          return;
+        }
         try {
           const data = JSON.parse(String(event.data)) as WsResponse | WsEvent;
           if (data.type === "response") {
@@ -295,6 +375,9 @@ export class SocialClient {
             if (data.event === "room:kicked" && this.roomKickedHandler) {
               this.roomKickedHandler(data.payload as RoomKickedPayload);
             }
+            if (data.event === "session:stop" && this.sessionStopHandler) {
+              this.sessionStopHandler(data.payload as SessionStopPayload);
+            }
             if (data.event === "room:chat" && this.roomChatHandler) {
               this.roomChatHandler(data.payload as RoomChatPayload);
             }
@@ -304,21 +387,34 @@ export class SocialClient {
         }
       };
     });
+
+    try {
+      await this.connectPromise;
+      this.reconnectAttempt = 0;
+      this.emitConnectionState("connected");
+      this.startHeartbeat();
+      this.flushQueuedMessages();
+    } finally {
+      this.connectPromise = null;
+    }
   }
 
   async request<T = unknown>(type: string, payload?: Record<string, unknown>): Promise<T> {
     await this.connect();
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      throw new Error("Signaling socket is not connected");
+    }
 
     const requestId = crypto.randomUUID();
     const promise = new Promise<unknown>((resolve, reject) => {
-      this.pending.set(requestId, { resolve, reject });
-      setTimeout(() => {
+      const timeoutId = setTimeout(() => {
         const pending = this.pending.get(requestId);
         if (pending) {
           this.pending.delete(requestId);
           pending.reject(new Error("Signaling timeout"));
         }
       }, 10000);
+      this.pending.set(requestId, { resolve, reject, timeoutId });
     });
 
     this.send(type, payload || {}, requestId);
@@ -360,7 +456,14 @@ export class SocialClient {
       emulatorId,
       romHash,
       protocolVersion: "1",
-      coreVersion: emulatorId === "snes" ? "snes9x-next" : "jsnes"
+      coreVersion:
+        emulatorId === "snes"
+          ? "snes9x-next"
+          : emulatorId === "gb" || emulatorId === "gba"
+            ? "mgba"
+            : emulatorId === "md"
+              ? "genesis_plus_gx"
+              : "jsnes"
     });
     return true;
   }
@@ -400,9 +503,71 @@ export class SocialClient {
   }
 
   private send(type: string, payload: Record<string, unknown>, requestId?: string): void {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+    const message = JSON.stringify({ type, requestId, payload });
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(message);
       return;
     }
-    this.ws.send(JSON.stringify({ type, requestId, payload }));
+
+    this.outboundQueue.push({ type, payload, requestId });
+    if (this.outboundQueue.length > this.maxOutboundQueueSize) {
+      this.outboundQueue.shift();
+    }
+    if (!this.manualClose) {
+      void this.connect().catch(() => undefined);
+    }
+  }
+
+  private flushQueuedMessages(): void {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN || this.outboundQueue.length === 0) {
+      return;
+    }
+    const queue = this.outboundQueue.splice(0, this.outboundQueue.length);
+    for (const msg of queue) {
+      this.ws.send(JSON.stringify(msg));
+    }
+  }
+
+  private scheduleReconnect(): void {
+    if (this.reconnectTimer || this.connectPromise || this.manualClose) {
+      return;
+    }
+    this.emitConnectionState("reconnecting");
+    const delayMs = Math.min(5000, 500 * 2 ** this.reconnectAttempt);
+    this.reconnectAttempt = Math.min(this.reconnectAttempt + 1, 6);
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      if (this.manualClose) {
+        return;
+      }
+      void this.connect().catch(() => {
+        this.scheduleReconnect();
+      });
+    }, delayMs);
+  }
+
+  private startHeartbeat(): void {
+    if (this.heartbeatTimer) {
+      return;
+    }
+    this.heartbeatTimer = setInterval(() => {
+      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+        return;
+      }
+      void this.request("ping", { t: Date.now() }).catch(() => {
+        try {
+          this.ws?.close();
+        } catch {
+          // noop
+        }
+      });
+    }, 15000);
+  }
+
+  private emitConnectionState(state: SocialConnectionState): void {
+    this.lastConnectionState = state;
+    if (this.connectionStateHandler) {
+      this.connectionStateHandler(state);
+    }
   }
 }

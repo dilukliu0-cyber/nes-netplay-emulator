@@ -1,11 +1,17 @@
 import { detectEmulatorByExt, normalizeExt } from "./detect";
+import { gbEmulatorDefinition } from "./gb";
+import { gbaEmulatorDefinition } from "./gba";
+import { mdEmulatorDefinition } from "./md";
 import { nesEmulatorDefinition } from "./nes";
 import { snesEmulatorDefinition } from "./snes";
 import type { EmulatorDefinition, EmulatorId } from "./types";
 
 const definitions: Record<EmulatorId, EmulatorDefinition> = {
   nes: nesEmulatorDefinition,
-  snes: snesEmulatorDefinition
+  snes: snesEmulatorDefinition,
+  gb: gbEmulatorDefinition,
+  gba: gbaEmulatorDefinition,
+  md: mdEmulatorDefinition
 };
 
 export function listEmulators(): EmulatorDefinition[] {

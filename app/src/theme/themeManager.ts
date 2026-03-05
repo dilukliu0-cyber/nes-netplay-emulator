@@ -1,4 +1,4 @@
-export const APP_THEMES = ["blue", "pink"] as const;
+export const APP_THEMES = ["blue", "pink", "steam"] as const;
 export type AppTheme = (typeof APP_THEMES)[number];
 
 const THEME_STORAGE_KEY = "theme";
@@ -6,6 +6,7 @@ const THEME_STORAGE_KEY = "theme";
 function normalizeTheme(themeName: string): AppTheme {
   const normalized = String(themeName || "").trim().toLowerCase();
   if (normalized === "pink" || normalized === "pink-cute") return "pink";
+  if (normalized === "steam" || normalized === "steam-dark") return "steam";
   return "blue";
 }
 

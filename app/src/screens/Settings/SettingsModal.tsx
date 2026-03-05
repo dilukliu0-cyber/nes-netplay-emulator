@@ -6,27 +6,21 @@ import { setTheme } from "../../theme/themeManager";
 import type {
   AudioSettings,
   ControlSettings,
-  LocalSignalingServerStatus,
   NetworkSettings,
-  NgrokTunnelStatus,
   Profile,
-  ReplaySettings,
   RetroApiKeyStatus,
-  UiSettings,
-  VideoSettings
+  UiSettings
 } from "../../types/global";
 
-type SettingsCategory = "general" | "controls" | "video" | "audio" | "network" | "library" | "about";
+type SettingsCategory = "account" | "server" | "controls" | "audio" | "about";
 type ControlAction = keyof ControlSettings;
 
 const categories: Array<{ id: SettingsCategory; label: string }> = [
-  { id: "general", label: t("settings.general") },
+  { id: "account", label: "Аккаунт" },
+  { id: "server", label: "Сервер" },
   { id: "controls", label: t("settings.controls") },
-  { id: "video", label: t("settings.video") },
   { id: "audio", label: t("settings.audio") },
-  { id: "network", label: t("settings.network") },
-  { id: "library", label: t("settings.library") },
-  { id: "about", label: t("settings.about") }
+  { id: "about", label: "О программе" }
 ];
 
 const controlLabels: Record<ControlAction, string> = {
@@ -65,26 +59,12 @@ export function SettingsModal(props: {
   raApiKeyStatus: RetroApiKeyStatus | null;
   audioSettings: AudioSettings;
   onSaveAudio: (patch: Partial<AudioSettings>) => void;
-  videoSettings: VideoSettings;
-  onSaveVideo: (patch: Partial<VideoSettings>) => void;
-  replaySettings: ReplaySettings;
-  onSaveReplay: (patch: Partial<ReplaySettings>) => void;
-  onResetReplay: () => void;
-  onOpenReplaysFolder: () => void;
   networkSettings: NetworkSettings;
   networkInput: string;
   onNetworkInputChange: (value: string) => void;
   onNetworkModeChange: (mode: NetworkSettings["netplayMode"]) => void;
   onConnectServer: () => void;
   networkBusy: boolean;
-  localServerStatus: LocalSignalingServerStatus | null;
-  localServerBusy: boolean;
-  onStartLocalServer: () => void;
-  onStopLocalServer: () => void;
-  ngrokStatus: NgrokTunnelStatus | null;
-  ngrokBusy: boolean;
-  onStartNgrok: () => void;
-  onStopNgrok: () => void;
 }) {
   const {
     open, category, onCategoryChange, onClose,
@@ -92,29 +72,14 @@ export function SettingsModal(props: {
     controls, waitingAction, onStartRebind, onResetControls,
     uiSettings, onSaveUiSettings,
     raApiKeyInput, onRaApiKeyInputChange, onSaveRaApiKey, onClearRaApiKey, raApiKeyBusy, raApiKeyStatus,
-    audioSettings, onSaveAudio, videoSettings, onSaveVideo,
-    replaySettings, onSaveReplay, onResetReplay, onOpenReplaysFolder,
+    audioSettings, onSaveAudio,
     networkSettings,
     networkInput,
     onNetworkInputChange,
     onNetworkModeChange,
     onConnectServer,
-    networkBusy,
-    localServerStatus,
-    localServerBusy,
-    onStartLocalServer,
-    onStopLocalServer,
-    ngrokStatus,
-    ngrokBusy,
-    onStartNgrok,
-    onStopNgrok
+    networkBusy
   } = props;
-  const liveWindowBackground = typeof window !== "undefined"
-    ? getComputedStyle(document.documentElement).getPropertyValue("--bg-window").trim().toUpperCase()
-    : "";
-  const liveAccent = typeof window !== "undefined"
-    ? getComputedStyle(document.documentElement).getPropertyValue("--accent").trim().toUpperCase()
-    : "";
 
   if (!open) return null;
 
@@ -134,10 +99,9 @@ export function SettingsModal(props: {
           </aside>
 
           <section className="settings-content">
-            {category === "general" && (
+            {category === "account" && (
               <Card className="settings-pane">
-                <h3>{t("settings.general")}</h3>
-                <p>{t("settings.steamLike")}</p>
+                <h3>Аккаунт</h3>
                 <div className="settings-grid settings-grid-two">
                   <label>
                     Nickname
@@ -173,46 +137,11 @@ export function SettingsModal(props: {
                         onSaveUiSettings({ theme: nextTheme });
                       }}
                     >
-                      <option value="blue">Steam Dark (Blue)</option>
+                      <option value="steam">Steam Dark</option>
+                      <option value="blue">Forest Green</option>
                       <option value="pink">Pink Cute</option>
                     </select>
                   </label>
-                  <label>
-                    RetroAchievements username
-                    <Input
-                      value={uiSettings.retroAchievementsUsername}
-                      onChange={(event) => onSaveUiSettings({ retroAchievementsUsername: event.target.value })}
-                      placeholder="username"
-                    />
-                  </label>
-                </div>
-                <div className="settings-grid">
-                  <label>
-                    RetroAchievements API key
-                    <Input
-                      type="password"
-                      value={raApiKeyInput}
-                      onChange={(event) => onRaApiKeyInputChange(event.target.value)}
-                      placeholder="Paste API key"
-                    />
-                  </label>
-                  <div className="settings-actions">
-                    <Button variant="secondary" data-variant="soft" onClick={onSaveRaApiKey} disabled={raApiKeyBusy || !raApiKeyInput.trim()}>
-                      Save API key
-                    </Button>
-                    <Button variant="danger" data-variant="danger" onClick={onClearRaApiKey} disabled={raApiKeyBusy}>
-                      Clear API key
-                    </Button>
-                  </div>
-                  <p className="settings-inline-note">
-                    {raApiKeyStatus?.configured
-                      ? `API key configured (${raApiKeyStatus.source}${raApiKeyStatus.persistent ? ", persistent" : ", session only"})`
-                      : "API key is not configured"}
-                  </p>
-                </div>
-                <div className="settings-theme-proof">
-                  <span>{`WindowBackground: ${liveWindowBackground}`}</span>
-                  <span>{`Accent: ${liveAccent}`}</span>
                 </div>
               </Card>
             )}
@@ -247,215 +176,100 @@ export function SettingsModal(props: {
               </Card>
             )}
 
-            {category === "video" && (
-              <Card className="settings-pane">
-                <h3>{t("settings.video")}: Image Filters</h3>
-                <div className="settings-grid settings-grid-two">
-                  <label>
-                    {t("settings.scale")}
-                    <select value={videoSettings.scale} onChange={(e) => onSaveVideo({ scale: e.target.value as VideoSettings["scale"] })}>
-                      <option value="2x">2x</option>
-                      <option value="3x">3x</option>
-                      <option value="4x">4x</option>
-                      <option value="fit">Fit</option>
-                    </select>
-                  </label>
-
-                  <label>
-                    {t("settings.pixelMode")}
-                    <select value={videoSettings.pixelMode} onChange={(e) => onSaveVideo({ pixelMode: e.target.value as VideoSettings["pixelMode"] })}>
-                      <option value="nearest">Pixel perfect (Nearest)</option>
-                      <option value="smooth">Smooth (Bilinear)</option>
-                    </select>
-                  </label>
-                </div>
-
-                <label className="checkbox-row">
-                  <input type="checkbox" checked={videoSettings.crtEnabled} onChange={(e) => onSaveVideo({ crtEnabled: e.target.checked })} />
-                  {t("settings.crt")}
-                </label>
-
-                <div className="settings-grid">
-                  <label>
-                    Scanlines intensity: {videoSettings.scanlinesIntensity}
-                    <input type="range" min={0} max={100} value={videoSettings.scanlinesIntensity} onChange={(e) => onSaveVideo({ scanlinesIntensity: Number(e.target.value) })} />
-                  </label>
-                  <label>
-                    Bloom / Glow: {videoSettings.bloom}
-                    <input type="range" min={0} max={100} value={videoSettings.bloom} onChange={(e) => onSaveVideo({ bloom: Number(e.target.value) })} />
-                  </label>
-                </div>
-
-                <label className="checkbox-row">
-                  <input type="checkbox" checked={videoSettings.vignette} onChange={(e) => onSaveVideo({ vignette: e.target.checked })} />
-                  {t("settings.vignette")}
-                </label>
-                <label className="checkbox-row">
-                  <input type="checkbox" checked={videoSettings.colorCorrection} onChange={(e) => onSaveVideo({ colorCorrection: e.target.checked })} />
-                  {t("settings.colorCorrection")}
-                </label>
-
-                <div className="settings-preview-note">{t("settings.previewNote")}</div>
-
-                <h3>{t("settings.recordingReplay")}</h3>
-                <label className="checkbox-row">
-                  <input type="checkbox" checked={replaySettings.enabled} onChange={(e) => onSaveReplay({ enabled: e.target.checked })} />
-                  {t("settings.enableReplay")}
-                </label>
-
-                <div className="settings-grid settings-grid-two">
-                  <label>
-                    {t("settings.hotkey")}
-                    <Input value={replaySettings.hotkey} onChange={(e) => onSaveReplay({ hotkey: e.target.value.toUpperCase() })} placeholder="F8" />
-                  </label>
-                  <label>
-                    {t("settings.prebufferSeconds")}
-                    <input type="range" min={5} max={30} value={replaySettings.prebufferSeconds} onChange={(e) => onSaveReplay({ prebufferSeconds: Number(e.target.value) })} />
-                    <span className="slider-note">{replaySettings.prebufferSeconds} sec</span>
-                  </label>
-                </div>
-
-                <div className="settings-grid settings-grid-two">
-                  <label>
-                    {t("settings.quality")}
-                    <select value={replaySettings.quality} onChange={(e) => onSaveReplay({ quality: e.target.value as ReplaySettings["quality"] })}>
-                      <option value="720p">720p</option>
-                      <option value="1080p">1080p</option>
-                    </select>
-                  </label>
-                  <label>
-                    {t("settings.fps")}
-                    <select value={String(replaySettings.fps)} onChange={(e) => onSaveReplay({ fps: Number(e.target.value) as ReplaySettings["fps"] })}>
-                      <option value="30">30</option>
-                      <option value="60">60</option>
-                    </select>
-                  </label>
-                </div>
-
-                <div className="settings-grid settings-grid-two">
-                  <label>
-                    {t("settings.format")}
-                    <Input value={replaySettings.format} readOnly />
-                  </label>
-                  <label>
-                    {t("settings.saveFolder")}
-                    <Input value={replaySettings.saveFolder} readOnly />
-                  </label>
-                </div>
-
-                <div className="settings-actions">
-                  <Button variant="secondary" onClick={onOpenReplaysFolder}>{t("settings.openReplayFolder")}</Button>
-                  <Button variant="danger" onClick={onResetReplay}>{t("settings.resetReplaySettings")}</Button>
-                </div>
-              </Card>
-            )}
-
             {category === "audio" && (
               <Card className="settings-pane">
                 <h3>{t("settings.audio")}</h3>
                 <div className="settings-grid">
-                  <label>
-                    {t("settings.sound")}
-                    <select value={audioSettings.enabled ? "on" : "off"} onChange={(e) => onSaveAudio({ enabled: e.target.value === "on" })}>
-                      <option value="on">{t("settings.on")}</option>
-                      <option value="off">{t("settings.off")}</option>
-                    </select>
+                  <label className="audio-switch-row">
+                    <input
+                      className="audio-switch-input"
+                      type="checkbox"
+                      checked={audioSettings.enabled}
+                      onChange={(e) => onSaveAudio({ enabled: e.target.checked })}
+                    />
+                    <span className="audio-switch-track" aria-hidden>
+                      <span className="audio-switch-thumb" />
+                    </span>
+                    <span>Включить звук</span>
+                  </label>
+                  <label className="audio-switch-row">
+                    <input
+                      className="audio-switch-input"
+                      type="checkbox"
+                      checked={uiSettings.inviteSoundEnabled}
+                      onChange={(e) => onSaveUiSettings({ inviteSoundEnabled: e.target.checked })}
+                    />
+                    <span className="audio-switch-track" aria-hidden>
+                      <span className="audio-switch-thumb" />
+                    </span>
+                    <span>Звук приглашений</span>
                   </label>
                   <label>
                     {t("settings.volume")}
                     <input type="range" min={0} max={100} value={audioSettings.volume} onChange={(e) => onSaveAudio({ volume: Number(e.target.value) })} />
                   </label>
-                  <label>
-                    {t("settings.latency")}
-                    <input type="range" min={0} max={500} step={10} value={audioSettings.latency} onChange={(e) => onSaveAudio({ latency: Number(e.target.value) })} />
-                  </label>
                 </div>
               </Card>
             )}
 
-            {category === "network" && (
+            {category === "server" && (
               <Card className="settings-pane">
-                <h3>{t("settings.network")}</h3>
+                <h3>Сервер</h3>
                 <div className="settings-grid">
                   <label>
-                    {t("settings.signalingServer")}
+                    Signaling server
                     <div className="network-connect-row">
                       <Input value={networkInput} onChange={(e) => onNetworkInputChange(e.target.value)} placeholder="ws://localhost:8787" />
-                      <Button variant="secondary" data-action="play" onClick={onConnectServer} disabled={networkBusy}>{networkBusy ? "..." : t("settings.connect")}</Button>
+                      <Button variant="secondary" data-action="play" onClick={onConnectServer} disabled={networkBusy}>{networkBusy ? "..." : "Подключить"}</Button>
                     </div>
                   </label>
 
                   <label>
-                    {t("settings.netplayMode")}
+                    Netplay mode
                     <select
                       value={networkSettings.netplayMode}
                       onChange={(e) => onNetworkModeChange(e.target.value as NetworkSettings["netplayMode"])}
                     >
-                      <option value="stream">{t("settings.streaming")}</option>
-                      <option value="lockstep">{t("settings.lockstep")}</option>
+                      <option value="stream">Стрим</option>
+                      <option value="lockstep">Управление</option>
                     </select>
                   </label>
+                  <label>
+                    RetroAchievements username
+                    <Input
+                      value={uiSettings.retroAchievementsUsername}
+                      onChange={(event) => onSaveUiSettings({ retroAchievementsUsername: event.target.value })}
+                      placeholder="username"
+                    />
+                  </label>
+                  <label>
+                    RetroAchievements API key
+                    <Input
+                      type="password"
+                      value={raApiKeyInput}
+                      onChange={(event) => onRaApiKeyInputChange(event.target.value)}
+                      placeholder="Paste API key"
+                    />
+                  </label>
+                  <div className="settings-actions">
+                    <Button variant="secondary" data-variant="soft" onClick={onSaveRaApiKey} disabled={raApiKeyBusy || !raApiKeyInput.trim()}>
+                      Save API key
+                    </Button>
+                    <Button variant="danger" data-variant="danger" onClick={onClearRaApiKey} disabled={raApiKeyBusy}>
+                      Clear API key
+                    </Button>
+                  </div>
+                  <p className="settings-inline-note">
+                    {raApiKeyStatus?.configured
+                      ? `API key configured (${raApiKeyStatus.source}${raApiKeyStatus.persistent ? ", persistent" : ", session only"})`
+                      : "API key is not configured"}
+                  </p>
                 </div>
 
                 <div className="network-current">
                   <p>URL: {networkSettings.signalingUrl}</p>
-                  <p>
-                    Local server: {localServerStatus?.running ? "Running" : "Stopped"}
-                    {localServerStatus?.pid ? ` (PID ${localServerStatus.pid})` : ""}
-                  </p>
-                  {localServerStatus?.message ? <p>{localServerStatus.message}</p> : null}
+                  <p>Сюда вынесены настройки сервера и API.</p>
                 </div>
-                <div className="settings-actions">
-                  <Button
-                    variant="secondary"
-                    data-variant="soft"
-                    onClick={onStartLocalServer}
-                    disabled={localServerBusy || Boolean(localServerStatus?.running)}
-                  >
-                    Запустить локальный сервер
-                  </Button>
-                  <Button
-                    variant="danger"
-                    data-variant="danger"
-                    onClick={onStopLocalServer}
-                    disabled={localServerBusy || !localServerStatus?.running}
-                  >
-                    Остановить локальный сервер
-                  </Button>
-                </div>
-                <div className="network-current">
-                  <p>Ngrok: {ngrokStatus?.running ? "Running" : "Stopped"}</p>
-                  {ngrokStatus?.publicUrl ? <p>Public URL: {ngrokStatus.publicUrl}</p> : null}
-                  {ngrokStatus?.message ? <p>{ngrokStatus.message}</p> : null}
-                </div>
-                <div className="settings-actions">
-                  <Button
-                    variant="secondary"
-                    data-variant="soft"
-                    onClick={onStartNgrok}
-                    disabled={ngrokBusy}
-                  >
-                    Запустить ngrok
-                  </Button>
-                  <Button
-                    variant="danger"
-                    data-variant="danger"
-                    onClick={onStopNgrok}
-                    disabled={ngrokBusy || !ngrokStatus?.running}
-                  >
-                    Остановить ngrok
-                  </Button>
-                </div>
-              </Card>
-            )}
-
-            {category === "library" && (
-              <Card className="settings-pane">
-                <h3>{t("settings.library")}</h3>
-                <label className="checkbox-row">
-                  <input type="checkbox" checked={uiSettings.libraryShowPlatformBadges} onChange={(e) => onSaveUiSettings({ libraryShowPlatformBadges: e.target.checked })} />
-                  {t("settings.showPlatformBadges")}
-                </label>
               </Card>
             )}
 

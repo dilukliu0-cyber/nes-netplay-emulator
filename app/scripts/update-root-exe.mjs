@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
+import { rcedit } from "rcedit";
 
 const appRoot = process.cwd();
 const projectRoot = path.resolve(appRoot, "..");
@@ -18,6 +19,7 @@ if (!portableExe) {
 }
 
 const target = path.join(projectRoot, "NES Emulator.exe");
+const iconPath = path.join(appRoot, "build", "icon.ico");
 try {
   execFileSync(
     "powershell.exe",
@@ -33,5 +35,21 @@ try {
     throw new Error("Cannot update NES Emulator.exe because it is locked. Close the app and run npm run dist:one again.");
   }
   throw error;
+}
+
+if (fs.existsSync(iconPath)) {
+  try {
+    await rcedit(target, {
+      icon: iconPath,
+      "file-version": "2.0.0",
+      "product-version": "2.0.0",
+      "version-string": {
+        ProductName: "NES Emulator 2",
+        FileDescription: "NES emulator with online netplay support"
+      }
+    });
+  } catch (error) {
+    console.warn("Failed to patch icon/version on root exe:", error);
+  }
 }
 console.log(`Updated root exe: ${target}`);

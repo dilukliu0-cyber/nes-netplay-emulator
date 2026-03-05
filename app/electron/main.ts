@@ -7,19 +7,18 @@ import {
   shell
 } from "electron";
 import { autoUpdater } from "electron-updater";
-import { execFile, spawn } from "child_process";
+import { execFile } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
 import * as crypto from "crypto";
 import { v4 as uuidv4 } from "uuid";
 import WebSocket from "ws";
 
-type Platform = "NES" | "SNES";
-type EmulatorId = "nes" | "snes";
+type Platform = "NES" | "SNES" | "GB" | "GBA" | "MD";
+type EmulatorId = "nes" | "snes" | "gb" | "gba" | "md";
 
 type ControlAction = "up" | "down" | "left" | "right" | "a" | "b" | "start" | "select";
-type ScaleMode = "2x" | "3x" | "4x" | "fit";
-type PixelMode = "nearest" | "smooth";
+type VideoFps = 30 | 60 | 120;
 type ReplayQuality = "720p" | "1080p";
 type ReplayFps = 30 | 60;
 type ReplayFormat = "webm";
@@ -42,14 +41,8 @@ interface AudioSettings {
 }
 
 interface VideoSettings {
-  fullscreen: boolean;
-  scale: ScaleMode;
-  pixelMode: PixelMode;
-  crtEnabled: boolean;
-  scanlinesIntensity: number;
-  bloom: number;
-  vignette: boolean;
-  colorCorrection: boolean;
+  targetFps: VideoFps;
+  smoothing: boolean;
 }
 
 interface NetworkSettings {
@@ -71,8 +64,9 @@ interface UiSettings {
   controlPreset: "keyboard" | "gamepad";
   libraryShowPlatformBadges: boolean;
   libraryEmulatorFilter: "all" | EmulatorId;
-  theme: "blue" | "pink";
+  theme: "blue" | "pink" | "steam";
   retroAchievementsUsername: string;
+  inviteSoundEnabled: boolean;
 }
 
 interface GameRecord {
@@ -137,6 +131,18 @@ interface RoomState {
   spectators: string[];
   locked: boolean;
   readyByUserId: string[];
+  session?: {
+    mode: "lockstep" | "stream";
+    gameId: string;
+    gameName: string;
+    platform: string;
+    emulatorId?: string;
+    romHash?: string;
+    protocolVersion?: string;
+    coreVersion?: string;
+    romBase64?: string;
+    startedAt: string;
+  };
 }
 
 interface WsResponse {
@@ -145,21 +151,6 @@ interface WsResponse {
   ok: boolean;
   payload?: unknown;
   error?: string;
-}
-
-interface LocalSignalingServerStatus {
-  running: boolean;
-  pid?: number;
-  port: number;
-  url: string;
-  message?: string;
-}
-
-interface NgrokTunnelStatus {
-  running: boolean;
-  pid?: number;
-  publicUrl?: string;
-  message?: string;
 }
 
 function normalizeExt(ext: string): string {
@@ -172,17 +163,27 @@ function detectEmulatorByExt(ext: string): EmulatorId | null {
   const normalized = normalizeExt(ext);
   if (normalized === ".nes") return "nes";
   if (normalized === ".sfc" || normalized === ".smc") return "snes";
+  if (normalized === ".gb" || normalized === ".gbc") return "gb";
+  if (normalized === ".gba") return "gba";
+  if (normalized === ".md" || normalized === ".gen" || normalized === ".bin") return "md";
   return null;
 }
 
 function emulatorToPlatform(emulatorId: EmulatorId): Platform {
-  return emulatorId === "snes" ? "SNES" : "NES";
+  if (emulatorId === "snes") return "SNES";
+  if (emulatorId === "gb") return "GB";
+  if (emulatorId === "gba") return "GBA";
+  if (emulatorId === "md") return "MD";
+  return "NES";
 }
 
 function isExtSupportedByEmulator(ext: string, emulatorId: EmulatorId): boolean {
   const normalized = normalizeExt(ext);
   if (emulatorId === "nes") return normalized === ".nes";
-  return normalized === ".sfc" || normalized === ".smc";
+  if (emulatorId === "snes") return normalized === ".sfc" || normalized === ".smc";
+  if (emulatorId === "gb") return normalized === ".gb" || normalized === ".gbc";
+  if (emulatorId === "gba") return normalized === ".gba";
+  return normalized === ".md" || normalized === ".gen" || normalized === ".bin";
 }
 
 const defaultControls: ControlSettings = {
@@ -203,14 +204,8 @@ const defaultAudioSettings: AudioSettings = {
 };
 
 const defaultVideoSettings: VideoSettings = {
-  fullscreen: true,
-  scale: "fit",
-  pixelMode: "nearest",
-  crtEnabled: false,
-  scanlinesIntensity: 35,
-  bloom: 0,
-  vignette: false,
-  colorCorrection: false
+  targetFps: 60,
+  smoothing: true
 };
 
 const defaultNetworkSettings: NetworkSettings = {
@@ -233,13 +228,17 @@ const defaultUiSettings: UiSettings = {
   libraryShowPlatformBadges: true,
   libraryEmulatorFilter: "all",
   theme: "blue",
-  retroAchievementsUsername: ""
+  retroAchievementsUsername: "",
+  inviteSoundEnabled: true
 };
 
 function formatDisplayVersion(version: string): string {
   const [majorRaw, , patchRaw] = version.split(".");
   const major = Number(majorRaw) || 1;
   const patch = Number(patchRaw) || 0;
+  if (patch <= 0) {
+    return String(major);
+  }
   return `${major}.${String(patch).padStart(2, "0")}`;
 }
 
@@ -264,7 +263,12 @@ function readJsonFile<T>(filePath: string, fallback: T): T {
 
 function writeJsonFile(filePath: string, data: unknown): void {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf-8");
+  const tempPath = `${filePath}.tmp-${process.pid}-${Date.now()}`;
+  fs.writeFileSync(tempPath, JSON.stringify(data, null, 2), "utf-8");
+  if (fs.existsSync(filePath)) {
+    fs.rmSync(filePath, { force: true });
+  }
+  fs.renameSync(tempPath, filePath);
 }
 
 function getLibraryFile(): string {
@@ -421,29 +425,23 @@ function saveAudioSettings(settings: AudioSettings): AudioSettings {
 }
 
 function loadVideoSettings(): VideoSettings {
-  const raw = readJsonFile<Partial<VideoSettings>>(getVideoFile(), {});
+  const raw = readJsonFile<Record<string, unknown>>(getVideoFile(), {});
+  const rawTargetFps = Number(raw.targetFps ?? raw.fps ?? defaultVideoSettings.targetFps);
+  const targetFps: VideoFps = rawTargetFps === 120 ? 120 : rawTargetFps === 30 ? 30 : 60;
+  const smoothing =
+    typeof raw.smoothing === "boolean"
+      ? raw.smoothing
+      : raw.pixelMode === "smooth";
   return {
-    fullscreen: raw.fullscreen ?? defaultVideoSettings.fullscreen,
-    scale: raw.scale === "2x" || raw.scale === "3x" || raw.scale === "4x" || raw.scale === "fit" ? raw.scale : defaultVideoSettings.scale,
-    pixelMode: raw.pixelMode === "smooth" ? "smooth" : "nearest",
-    crtEnabled: Boolean(raw.crtEnabled),
-    scanlinesIntensity: Math.max(0, Math.min(100, Number(raw.scanlinesIntensity ?? defaultVideoSettings.scanlinesIntensity))),
-    bloom: Math.max(0, Math.min(100, Number(raw.bloom ?? defaultVideoSettings.bloom))),
-    vignette: Boolean(raw.vignette),
-    colorCorrection: Boolean(raw.colorCorrection)
+    targetFps,
+    smoothing
   };
 }
 
 function saveVideoSettings(settings: VideoSettings): VideoSettings {
   const normalized: VideoSettings = {
-    fullscreen: Boolean(settings.fullscreen),
-    scale: settings.scale === "2x" || settings.scale === "3x" || settings.scale === "4x" || settings.scale === "fit" ? settings.scale : defaultVideoSettings.scale,
-    pixelMode: settings.pixelMode === "smooth" ? "smooth" : "nearest",
-    crtEnabled: Boolean(settings.crtEnabled),
-    scanlinesIntensity: Math.max(0, Math.min(100, Number(settings.scanlinesIntensity) || 0)),
-    bloom: Math.max(0, Math.min(100, Number(settings.bloom) || 0)),
-    vignette: Boolean(settings.vignette),
-    colorCorrection: Boolean(settings.colorCorrection)
+    targetFps: settings.targetFps === 120 || settings.targetFps === 30 ? settings.targetFps : 60,
+    smoothing: Boolean(settings.smoothing)
   };
   writeJsonFile(getVideoFile(), normalized);
   return normalized;
@@ -499,14 +497,26 @@ function loadUiSettings(): UiSettings {
   const raw = readJsonFile<Partial<UiSettings>>(getUiSettingsFile(), {});
   const rawTheme = String(raw.theme || "").trim().toLowerCase();
   const normalizedTheme: UiSettings["theme"] =
-    rawTheme === "pink" || rawTheme === "pink-cute" ? "pink" : "blue";
+    rawTheme === "pink" || rawTheme === "pink-cute"
+      ? "pink"
+      : rawTheme === "steam" || rawTheme === "steam-dark"
+        ? "steam"
+        : "blue";
   const retroAchievementsUsername = String(raw.retroAchievementsUsername || "").trim();
   return {
     controlPreset: raw.controlPreset === "gamepad" ? "gamepad" : "keyboard",
     libraryShowPlatformBadges: raw.libraryShowPlatformBadges ?? true,
-    libraryEmulatorFilter: raw.libraryEmulatorFilter === "nes" || raw.libraryEmulatorFilter === "snes" ? raw.libraryEmulatorFilter : "all",
+    libraryEmulatorFilter:
+      raw.libraryEmulatorFilter === "nes" ||
+      raw.libraryEmulatorFilter === "snes" ||
+      raw.libraryEmulatorFilter === "gb" ||
+      raw.libraryEmulatorFilter === "gba" ||
+      raw.libraryEmulatorFilter === "md"
+        ? raw.libraryEmulatorFilter
+        : "all",
     theme: normalizedTheme,
-    retroAchievementsUsername
+    retroAchievementsUsername,
+    inviteSoundEnabled: typeof raw.inviteSoundEnabled === "boolean" ? raw.inviteSoundEnabled : true
   };
 }
 
@@ -516,13 +526,20 @@ function saveUiSettings(settings: Partial<UiSettings>): UiSettings {
   const normalizedTheme: UiSettings["theme"] =
     incomingTheme === "pink" || incomingTheme === "pink-cute"
       ? "pink"
-      : incomingTheme === "blue" || incomingTheme === "steam-dark"
-        ? "blue"
+      : incomingTheme === "steam" || incomingTheme === "steam-dark"
+        ? "steam"
+        : incomingTheme === "blue"
+          ? "blue"
         : current.theme;
   const next: UiSettings = {
     controlPreset: settings.controlPreset === "gamepad" ? "gamepad" : settings.controlPreset === "keyboard" ? "keyboard" : current.controlPreset,
     libraryShowPlatformBadges: typeof settings.libraryShowPlatformBadges === "boolean" ? settings.libraryShowPlatformBadges : current.libraryShowPlatformBadges,
-    libraryEmulatorFilter: settings.libraryEmulatorFilter === "nes" || settings.libraryEmulatorFilter === "snes"
+    libraryEmulatorFilter:
+      settings.libraryEmulatorFilter === "nes" ||
+      settings.libraryEmulatorFilter === "snes" ||
+      settings.libraryEmulatorFilter === "gb" ||
+      settings.libraryEmulatorFilter === "gba" ||
+      settings.libraryEmulatorFilter === "md"
       ? settings.libraryEmulatorFilter
       : settings.libraryEmulatorFilter === "all"
         ? "all"
@@ -530,7 +547,10 @@ function saveUiSettings(settings: Partial<UiSettings>): UiSettings {
     theme: normalizedTheme,
     retroAchievementsUsername: typeof settings.retroAchievementsUsername === "string"
       ? settings.retroAchievementsUsername.trim()
-      : current.retroAchievementsUsername
+      : current.retroAchievementsUsername,
+    inviteSoundEnabled: typeof settings.inviteSoundEnabled === "boolean"
+      ? settings.inviteSoundEnabled
+      : current.inviteSoundEnabled
   };
   writeJsonFile(getUiSettingsFile(), next);
   return next;
@@ -862,7 +882,8 @@ class SignalClient {
         this.send("auth", {
           userId: profile.userId,
           displayName: profile.displayName,
-          friendCode: profile.friendCode
+          friendCode: profile.friendCode,
+          avatarDataUrl: profile.avatarDataUrl
         }, requestId);
       });
 
@@ -929,260 +950,6 @@ class SignalClient {
 
 let mainWindow: BrowserWindow | null = null;
 const signalClient = new SignalClient();
-let localSignalingProcess: import("child_process").ChildProcessWithoutNullStreams | null = null;
-let localSignalingPort = 8787;
-let localSignalingMessage = "";
-let ngrokProcess: import("child_process").ChildProcessWithoutNullStreams | null = null;
-let ngrokPublicUrl = "";
-let ngrokMessage = "";
-
-function parseSignalingPort(url: string | undefined): number {
-  const fallback = 8787;
-  const raw = String(url || "").trim();
-  if (!raw) return fallback;
-  try {
-    const parsed = new URL(raw);
-    const port = Number(parsed.port || fallback);
-    return Number.isFinite(port) && port > 0 ? port : fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function resolveServerEntryPath(): string | null {
-  const candidates = [
-    path.resolve(app.getAppPath(), "../server/dist/index.js"),
-    path.resolve(app.getAppPath(), "../../server/dist/index.js"),
-    path.resolve(process.cwd(), "../server/dist/index.js"),
-    path.resolve(process.cwd(), "server/dist/index.js")
-  ];
-  const found = candidates.find((candidate) => fs.existsSync(candidate));
-  return found || null;
-}
-
-function getLocalSignalingStatus(): LocalSignalingServerStatus {
-  const running = Boolean(localSignalingProcess && !localSignalingProcess.killed && localSignalingProcess.exitCode === null);
-  return {
-    running,
-    pid: running ? localSignalingProcess?.pid : undefined,
-    port: localSignalingPort,
-    url: `ws://127.0.0.1:${localSignalingPort}`,
-    message: localSignalingMessage || undefined
-  };
-}
-
-async function startLocalSignalingServer(preferredUrl?: string): Promise<LocalSignalingServerStatus> {
-  const current = getLocalSignalingStatus();
-  if (current.running) {
-    return current;
-  }
-
-  const serverEntry = resolveServerEntryPath();
-  if (!serverEntry) {
-    localSignalingMessage = "server/dist/index.js not found. Build server first.";
-    return getLocalSignalingStatus();
-  }
-
-  localSignalingPort = parseSignalingPort(preferredUrl || loadNetworkSettings().signalingUrl);
-  const child = spawn(process.execPath, [serverEntry], {
-    windowsHide: true,
-    stdio: "pipe",
-    env: {
-      ...process.env,
-      SIGNALING_PORT: String(localSignalingPort)
-    }
-  });
-
-  localSignalingProcess = child;
-  localSignalingMessage = "Starting local server...";
-
-  child.stdout.on("data", () => {
-    localSignalingMessage = `Local server running on :${localSignalingPort}`;
-  });
-  child.stderr.on("data", (chunk: Buffer) => {
-    const text = String(chunk || "").trim();
-    if (text) {
-      localSignalingMessage = text.slice(0, 220);
-    }
-  });
-  child.on("exit", (code, signal) => {
-    localSignalingProcess = null;
-    localSignalingMessage = `Local server stopped (${signal || code || 0})`;
-  });
-
-  await new Promise((resolve) => setTimeout(resolve, 350));
-  return getLocalSignalingStatus();
-}
-
-async function stopLocalSignalingServer(): Promise<LocalSignalingServerStatus> {
-  if (!localSignalingProcess || localSignalingProcess.killed || localSignalingProcess.exitCode !== null) {
-    localSignalingProcess = null;
-    localSignalingMessage = "Local server is not running";
-    return getLocalSignalingStatus();
-  }
-
-  const proc = localSignalingProcess;
-  await new Promise<void>((resolve) => {
-    let settled = false;
-    const finish = () => {
-      if (settled) return;
-      settled = true;
-      resolve();
-    };
-    proc.once("exit", finish);
-    try {
-      proc.kill("SIGTERM");
-    } catch {
-      finish();
-      return;
-    }
-    setTimeout(() => {
-      if (proc.exitCode === null && !proc.killed) {
-        try {
-          proc.kill("SIGKILL");
-        } catch {
-          // noop
-        }
-      }
-      finish();
-    }, 1500);
-  });
-
-  localSignalingProcess = null;
-  localSignalingMessage = "Local server stopped";
-  return getLocalSignalingStatus();
-}
-
-function getNgrokStatus(): NgrokTunnelStatus {
-  const running = Boolean(ngrokProcess && !ngrokProcess.killed && ngrokProcess.exitCode === null);
-  return {
-    running,
-    pid: running ? ngrokProcess?.pid : undefined,
-    publicUrl: ngrokPublicUrl || undefined,
-    message: ngrokMessage || undefined
-  };
-}
-
-function parseNgrokPublicUrl(text: string): string {
-  const fromJson = (() => {
-    try {
-      const parsed = JSON.parse(text) as Record<string, unknown>;
-      const msg = parsed.msg;
-      const url = parsed.url;
-      if (typeof msg === "string" && msg.toLowerCase().includes("started tunnel") && typeof url === "string") {
-        return url;
-      }
-      return "";
-    } catch {
-      return "";
-    }
-  })();
-  if (fromJson) {
-    return fromJson;
-  }
-  const match = text.match(/https:\/\/[a-zA-Z0-9.-]+/);
-  return match ? match[0] : "";
-}
-
-async function startNgrokTunnel(preferredUrl?: string): Promise<NgrokTunnelStatus> {
-  const current = getNgrokStatus();
-  if (current.running) {
-    return current;
-  }
-
-  const port = parseSignalingPort(preferredUrl || loadNetworkSettings().signalingUrl);
-  const args = process.platform === "win32"
-    ? ["/c", "ngrok", "http", `http://127.0.0.1:${port}`, "--log=stdout", "--log-format=json"]
-    : ["http", `http://127.0.0.1:${port}`, "--log=stdout", "--log-format=json"];
-  const command = process.platform === "win32" ? "cmd.exe" : "ngrok";
-
-  const child = spawn(command, args, {
-    windowsHide: true,
-    stdio: "pipe",
-    env: {
-      ...process.env
-    }
-  });
-
-  ngrokProcess = child;
-  ngrokPublicUrl = "";
-  ngrokMessage = "Starting ngrok...";
-
-  const onOutput = (chunk: Buffer) => {
-    const text = String(chunk || "").trim();
-    if (!text) {
-      return;
-    }
-    const publicUrl = parseNgrokPublicUrl(text);
-    if (publicUrl) {
-      ngrokPublicUrl = publicUrl.replace(/^http:\/\//i, "ws://").replace(/^https:\/\//i, "wss://");
-      ngrokMessage = "Ngrok tunnel is running";
-      return;
-    }
-    if (text.toLowerCase().includes("err") || text.toLowerCase().includes("error")) {
-      ngrokMessage = text.slice(0, 220);
-    }
-  };
-
-  child.stdout.on("data", onOutput);
-  child.stderr.on("data", onOutput);
-  child.on("exit", (code, signal) => {
-    ngrokProcess = null;
-    ngrokPublicUrl = "";
-    ngrokMessage = `Ngrok stopped (${signal || code || 0})`;
-  });
-  child.on("error", (error) => {
-    ngrokProcess = null;
-    ngrokPublicUrl = "";
-    ngrokMessage = error.message.includes("ENOENT")
-      ? "ngrok not found. Install ngrok and add it to PATH."
-      : `Failed to start ngrok: ${error.message}`;
-  });
-
-  await new Promise((resolve) => setTimeout(resolve, 1200));
-  return getNgrokStatus();
-}
-
-async function stopNgrokTunnel(): Promise<NgrokTunnelStatus> {
-  if (!ngrokProcess || ngrokProcess.killed || ngrokProcess.exitCode !== null) {
-    ngrokProcess = null;
-    ngrokPublicUrl = "";
-    ngrokMessage = "Ngrok is not running";
-    return getNgrokStatus();
-  }
-
-  const proc = ngrokProcess;
-  await new Promise<void>((resolve) => {
-    let settled = false;
-    const finish = () => {
-      if (settled) return;
-      settled = true;
-      resolve();
-    };
-    proc.once("exit", finish);
-    try {
-      proc.kill("SIGTERM");
-    } catch {
-      finish();
-      return;
-    }
-    setTimeout(() => {
-      if (proc.exitCode === null && !proc.killed) {
-        try {
-          proc.kill("SIGKILL");
-        } catch {
-          // noop
-        }
-      }
-      finish();
-    }, 1500);
-  });
-
-  ngrokProcess = null;
-  ngrokPublicUrl = "";
-  ngrokMessage = "Ngrok stopped";
-  return getNgrokStatus();
-}
 
 function randomFriendCode(): string {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -1195,6 +962,71 @@ function randomFriendCode(): string {
 
 function getCoversDir(): string {
   return userDataPath("covers");
+}
+
+function normalizeGameTitle(rawName: string): string {
+  return String(rawName || "")
+    .replace(/\.[a-z0-9]+$/i, "")
+    .replace(/\[[^\]]*]/g, " ")
+    .replace(/\([^)]*]/g, " ")
+    .replace(/[._]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function escapeXml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+function colorByPlatform(platform: Platform): { from: string; to: string } {
+  if (platform === "SNES") return { from: "#4f46e5", to: "#7c3aed" };
+  if (platform === "GB") return { from: "#16a34a", to: "#15803d" };
+  if (platform === "GBA") return { from: "#0ea5e9", to: "#2563eb" };
+  if (platform === "MD") return { from: "#f97316", to: "#ea580c" };
+  return { from: "#ef4444", to: "#dc2626" };
+}
+
+function buildAutoCoverSvg(game: Pick<GameRecord, "name" | "platform">): string {
+  const palette = colorByPlatform(game.platform);
+  const title = escapeXml(game.name || "Unknown Game");
+  const platform = escapeXml(game.platform);
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="${palette.from}"/>
+      <stop offset="100%" stop-color="${palette.to}"/>
+    </linearGradient>
+  </defs>
+  <rect width="640" height="360" fill="url(#bg)"/>
+  <rect x="20" y="20" width="600" height="320" rx="18" fill="rgba(0,0,0,0.22)" stroke="rgba(255,255,255,0.2)"/>
+  <text x="38" y="88" fill="#ffffff" font-size="28" font-family="Segoe UI, Arial, sans-serif" font-weight="700">${platform}</text>
+  <text x="38" y="152" fill="#ffffff" font-size="36" font-family="Segoe UI, Arial, sans-serif" font-weight="800">${title}</text>
+</svg>`;
+}
+
+function ensureAutoCover(game: GameRecord): GameRecord {
+  if (game.hasCover || game.coverFileName) {
+    return game;
+  }
+  const coverDir = getCoversDir();
+  fs.mkdirSync(coverDir, { recursive: true });
+  const coverFileName = `${game.id}.svg`;
+  const coverPath = path.join(coverDir, coverFileName);
+  if (!fs.existsSync(coverPath)) {
+    const svg = buildAutoCoverSvg(game);
+    fs.writeFileSync(coverPath, svg, "utf-8");
+  }
+  return {
+    ...game,
+    coverFileName,
+    hasCover: true
+  };
 }
 
 function removeExistingCovers(gameId: string): void {
@@ -1236,8 +1068,22 @@ function loadLibrary(): GameRecord[] {
   const normalized = items.map((item) => {
     const ext = normalizeExt(path.extname(item.path || ""));
     const detected = detectEmulatorByExt(ext);
-    const fallbackByPlatform: EmulatorId = item.platform === "SNES" ? "snes" : "nes";
-    const nextEmulatorId: EmulatorId = item.emulatorId === "nes" || item.emulatorId === "snes"
+    const fallbackByPlatform: EmulatorId =
+      item.platform === "SNES"
+        ? "snes"
+        : item.platform === "GB"
+          ? "gb"
+          : item.platform === "GBA"
+            ? "gba"
+            : item.platform === "MD"
+              ? "md"
+              : "nes";
+    const nextEmulatorId: EmulatorId =
+      item.emulatorId === "nes" ||
+      item.emulatorId === "snes" ||
+      item.emulatorId === "gb" ||
+      item.emulatorId === "gba" ||
+      item.emulatorId === "md"
       ? item.emulatorId
       : (detected ?? fallbackByPlatform);
 
@@ -1360,7 +1206,28 @@ function loadOrCreateProfile(): Profile {
   return profile;
 }
 
+function resolveWindowIconPath(): string | undefined {
+  const candidates = [
+    path.join(process.cwd(), "build", "icon.ico"),
+    path.join(app.getAppPath(), "build", "icon.ico"),
+    path.join(path.dirname(process.execPath), "resources", "app.asar.unpacked", "build", "icon.ico"),
+    path.join(process.resourcesPath, "build", "icon.ico"),
+    path.join(process.resourcesPath, "app.asar.unpacked", "build", "icon.ico")
+  ];
+  for (const candidate of candidates) {
+    try {
+      if (fs.existsSync(candidate)) {
+        return candidate;
+      }
+    } catch {
+      // noop
+    }
+  }
+  return undefined;
+}
+
 function createMainWindow(): void {
+  const icon = resolveWindowIconPath();
   mainWindow = new BrowserWindow({
     title: appDisplayName,
     width: 1400,
@@ -1369,6 +1236,7 @@ function createMainWindow(): void {
     minHeight: 720,
     backgroundColor: "#1B1E24",
     autoHideMenuBar: true,
+    ...(icon ? { icon } : {}),
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -1423,6 +1291,7 @@ function setupAutoUpdater(): void {
 }
 
 app.whenReady().then(() => {
+  app.setAppUserModelId("com.mvp.nesnetplay2");
   const profile = loadOrCreateProfile();
   void signalClient.connect(profile).catch(() => {
     // server may not be running in local setup
@@ -1445,20 +1314,6 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", () => {
-  if (localSignalingProcess && localSignalingProcess.exitCode === null && !localSignalingProcess.killed) {
-    try {
-      localSignalingProcess.kill("SIGTERM");
-    } catch {
-      // noop
-    }
-  }
-  if (ngrokProcess && ngrokProcess.exitCode === null && !ngrokProcess.killed) {
-    try {
-      ngrokProcess.kill("SIGTERM");
-    } catch {
-      // noop
-    }
-  }
 });
 
 ipcMain.handle("profile:get", async (): Promise<Profile> => {
@@ -1495,7 +1350,7 @@ ipcMain.handle("games:add", async (): Promise<GameRecord | null> => {
     title: "Add ROM",
     properties: ["openFile"],
     filters: [
-      { name: "ROM", extensions: ["nes", "sfc", "smc"] }
+      { name: "ROM", extensions: ["nes", "sfc", "smc", "gb", "gbc", "gba", "md", "gen", "bin"] }
     ]
   });
 
@@ -1517,7 +1372,7 @@ ipcMain.handle("games:add", async (): Promise<GameRecord | null> => {
 
   const game: GameRecord = {
     id: uuidv4(),
-    name: path.basename(filePath, ext),
+    name: normalizeGameTitle(path.basename(filePath, ext)),
     path: filePath,
     platform,
     emulatorId,
@@ -1532,9 +1387,10 @@ ipcMain.handle("games:add", async (): Promise<GameRecord | null> => {
     return exists;
   }
 
-  library.unshift(game);
+  const withAutoCover = ensureAutoCover(game);
+  library.unshift(withAutoCover);
   saveLibrary(library);
-  return game;
+  return withAutoCover;
 });
 
 ipcMain.handle("games:list", async (): Promise<GameRecord[]> => {
@@ -1548,7 +1404,7 @@ ipcMain.handle("games:remove", async (_event, gameId: string): Promise<GameRecor
 });
 
 ipcMain.handle("games:updateEmulator", async (_event, gameId: string, emulatorId: EmulatorId): Promise<GameRecord> => {
-  if (emulatorId !== "nes" && emulatorId !== "snes") {
+  if (emulatorId !== "nes" && emulatorId !== "snes" && emulatorId !== "gb" && emulatorId !== "gba" && emulatorId !== "md") {
     throw new Error("Unsupported emulator id");
   }
   const library = loadLibrary();
@@ -1757,30 +1613,6 @@ ipcMain.handle("server:connect", async (_event, signalingUrl?: string): Promise<
   return true;
 });
 
-ipcMain.handle("network:getLocalServerStatus", async (): Promise<LocalSignalingServerStatus> => {
-  return getLocalSignalingStatus();
-});
-
-ipcMain.handle("network:startLocalServer", async (_event, signalingUrl?: string): Promise<LocalSignalingServerStatus> => {
-  return startLocalSignalingServer(signalingUrl);
-});
-
-ipcMain.handle("network:stopLocalServer", async (): Promise<LocalSignalingServerStatus> => {
-  return stopLocalSignalingServer();
-});
-
-ipcMain.handle("network:getNgrokStatus", async (): Promise<NgrokTunnelStatus> => {
-  return getNgrokStatus();
-});
-
-ipcMain.handle("network:startNgrok", async (_event, signalingUrl?: string): Promise<NgrokTunnelStatus> => {
-  return startNgrokTunnel(signalingUrl);
-});
-
-ipcMain.handle("network:stopNgrok", async (): Promise<NgrokTunnelStatus> => {
-  return stopNgrokTunnel();
-});
-
 ipcMain.handle("network:ensureStreamFirewallAccess", async (): Promise<{ ok: boolean; message?: string }> => {
   return ensureStreamFirewallAccess();
 });
@@ -1839,7 +1671,14 @@ ipcMain.handle("covers:getCoverDataUrl", async (_event, gameId: string): Promise
   }
   const bytes = fs.readFileSync(coverPath);
   const ext = path.extname(coverPath).toLowerCase();
-  const mime = ext === ".jpg" || ext === ".jpeg" ? "image/jpeg" : ext === ".webp" ? "image/webp" : "image/png";
+  const mime =
+    ext === ".jpg" || ext === ".jpeg"
+      ? "image/jpeg"
+      : ext === ".webp"
+        ? "image/webp"
+        : ext === ".svg"
+          ? "image/svg+xml"
+          : "image/png";
   return `data:${mime};base64,${bytes.toString("base64")}`;
 });
 

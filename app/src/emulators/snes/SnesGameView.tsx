@@ -106,6 +106,10 @@ export function SnesGameView(props: {
   pauseInfo?: string;
   onToggleAudio: () => void;
   onTogglePause: () => void;
+  showRoomPauseAction: boolean;
+  roomPauseLabel: string;
+  onToggleRoomPause: () => void;
+  onVisualReady: () => void;
   onOpenSettings: () => void;
   onExit: () => void;
   onToast: (message: string) => void;
@@ -118,7 +122,7 @@ export function SnesGameView(props: {
   localUserId?: string;
 }) {
   const {
-    game, romBase64, audioSettings, netplay, paused, pauseButtonLabel, pauseInfo, onToggleAudio, onTogglePause, onOpenSettings, onExit, onToast,
+    game, romBase64, audioSettings, netplay, paused, pauseButtonLabel, pauseInfo, onToggleAudio, onTogglePause, showRoomPauseAction, roomPauseLabel, onToggleRoomPause, onVisualReady, onOpenSettings, onExit, onToast,
     showInGameChat, inGameChatSide, roomChatMessages, roomChatInput, onRoomChatInput, onSendRoomChat, localUserId
   } = props;
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -179,17 +183,17 @@ export function SnesGameView(props: {
     }
     return bytes;
   }, [romBase64]);
+  const emulatorDefinition = useMemo(() => getEmulator(game.emulatorId), [game.emulatorId]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const emulator = getEmulator("snes");
-    const session = emulator.createSession({
+    const session = emulatorDefinition.createSession({
       onFps: (nextFps) => setFps(nextFps),
       onError: (error) => {
-        console.error("SNES session error:", error);
-        onToast(error.message || "SNES session error");
+        console.error(`${emulatorDefinition.short} session error:`, error);
+        onToast(error.message || `${emulatorDefinition.short} session error`);
       }
     });
     sessionRef.current = session;
@@ -202,12 +206,13 @@ export function SnesGameView(props: {
         if (disposed) return;
         await session.loadRom(romBytes);
         if (disposed) return;
+        onVisualReady();
         session.setVolume(audioSettings.enabled ? audioSettings.volume / 100 : 0);
         if (!pausedRef.current) {
           session.start();
         }
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Failed to start SNES";
+        const message = error instanceof Error ? error.message : `Failed to start ${emulatorDefinition.short}`;
         onToast(message);
       }
     };
@@ -220,11 +225,11 @@ export function SnesGameView(props: {
         session.stop();
         session.destroy();
       } catch (error) {
-        console.error("Failed to stop SNES session", error);
+        console.error(`Failed to stop ${emulatorDefinition.short} session`, error);
       }
       sessionRef.current = null;
     };
-  }, [audioSettings.enabled, audioSettings.volume, onToast, romBytes]);
+  }, [audioSettings.enabled, audioSettings.volume, emulatorDefinition, onToast, onVisualReady, romBytes]);
 
   useEffect(() => {
     const session = sessionRef.current;
@@ -486,7 +491,7 @@ export function SnesGameView(props: {
       </div>
       <div className="replay-controls">
         <Button variant="secondary" onClick={onExit}>Exit</Button>
-        <span className="replay-meta">SNES | FPS: {fps}</span>
+        <span className="replay-meta">{emulatorDefinition.short} | FPS: {fps}</span>
       </div>
       {showInGameChat && (
         <Card className={`ingame-chat-panel ingame-chat-${inGameChatSide}`}>
@@ -531,6 +536,7 @@ export function SnesGameView(props: {
               <Button variant="secondary" onClick={() => setMenuOpen(false)}>{t("app.gameMenuContinue")}</Button>
               <Button variant="secondary" onClick={() => { void restartGame(); }}>Начать заново</Button>
               <Button variant="secondary" onClick={() => { onToggleAudio(); }}>{audioSettings.enabled ? t("app.gameMenuSoundOn") : t("app.gameMenuSoundOff")}</Button>
+              {showRoomPauseAction && <Button variant="secondary" onClick={() => onToggleRoomPause()}>{roomPauseLabel}</Button>}
               <Button variant="secondary" onClick={() => { setMenuOpen(false); onOpenSettings(); }}>{t("app.gameMenuSettings")}</Button>
               <Button variant="danger" onClick={onExit}>{t("app.gameMenuExit")}</Button>
             </div>
@@ -596,3 +602,4 @@ export function SnesGameView(props: {
     </div>
   );
 }
+

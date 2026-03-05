@@ -173,6 +173,46 @@ button {
     radial-gradient(500px 220px at 8% 94%, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0) 70%);
 }
 
+:root[data-theme="steam"] .app-shell.steam-layout {
+  gap: 12px;
+  padding: 10px;
+  grid-template-columns: minmax(336px, 364px) minmax(0, 1fr);
+}
+
+:root[data-theme="steam"] .steam-sidebar,
+:root[data-theme="steam"] .steam-main,
+:root[data-theme="steam"] .game-column {
+  gap: 12px;
+}
+
+:root[data-theme="steam"] .hero-card {
+  grid-template-columns: minmax(304px, 38%) minmax(0, 1fr);
+  padding: 12px;
+}
+
+:root[data-theme="steam"] .hero-meta h1 {
+  font-size: 52px;
+  line-height: 1.02;
+}
+
+:root[data-theme="steam"] .profile-main strong {
+  font-size: 21px;
+}
+
+:root[data-theme="steam"] .topbar-title {
+  font-size: 16px;
+}
+
+:root[data-theme="steam"] .stat-card-combined {
+  border-radius: 20px;
+}
+
+@media (max-width: 1100px) {
+  :root[data-theme="steam"] .app-shell.steam-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
 :root[data-theme="pink"] .app-shell.steam-layout {
   gap: 12px;
   padding: 10px;
@@ -474,60 +514,6 @@ button {
 :root[data-theme="pink"] .room-member-item,
 :root[data-theme="pink"] .room-chat-list {
   border-radius: 18px;
-}
-
-/* Bow PNGs from rofs */
-:root[data-theme="pink"] .ui-button.with-bow::after {
-  width: 16px;
-  height: 16px;
-  opacity: 1;
-  background: url("../../assets/bows/rofs.png") no-repeat;
-  background-size: 220% 220%;
-  background-position: 16% 18%;
-  mask: none;
-  -webkit-mask: none;
-}
-
-:root[data-theme="pink"] .hero-card::after {
-  width: 30px;
-  height: 24px;
-  right: 12px;
-  bottom: 10px;
-  opacity: 0.96;
-  background: url("../../assets/bows/rofs.png") no-repeat;
-  background-size: 220% 220%;
-  background-position: 14% 16%;
-  background-color: transparent;
-  mask: none;
-  -webkit-mask: none;
-}
-
-:root[data-theme="pink"] .tabs-card::after {
-  width: 30px;
-  height: 24px;
-  right: 12px;
-  bottom: 10px;
-  opacity: 0.96;
-  background: url("../../assets/bows/rofs.png") no-repeat;
-  background-size: 220% 220%;
-  background-position: 62% 16%;
-  background-color: transparent;
-  mask: none;
-  -webkit-mask: none;
-}
-
-:root[data-theme="pink"] .library-panel::after {
-  content: "";
-  position: absolute;
-  right: 10px;
-  bottom: 10px;
-  width: 30px;
-  height: 24px;
-  opacity: 0.96;
-  pointer-events: none;
-  background: url("../../assets/bows/rofs.png") no-repeat;
-  background-size: 220% 220%;
-  background-position: 62% 62%;
 }
 
 /* Sakura particles from png (cropped) */

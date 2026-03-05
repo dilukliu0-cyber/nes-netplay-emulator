@@ -4,6 +4,7 @@ import App from "./App";
 import "./styles.css";
 import "./renderer/styles/theme-blue.css";
 import "./renderer/styles/theme-pink.css";
+import "./renderer/styles/theme-steam.css";
 import "./renderer/styles/app.css";
 import { registerComputedStyleCheck } from "./renderer/debug/checkComputedStyles";
 import { loadTheme } from "./theme/themeManager";

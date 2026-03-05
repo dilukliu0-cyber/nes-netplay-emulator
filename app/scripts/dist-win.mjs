@@ -1,8 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
+import { rcedit } from "rcedit";
 
 const distDir = path.resolve(process.cwd(), "dist");
+const unpackedExe = path.join(distDir, "win-unpacked", "NES Emulator 2.exe");
+const iconPath = path.resolve(process.cwd(), "build", "icon.ico");
 const maxAttempts = 6;
 
 function runNodeScript(scriptPath, args = []) {
@@ -91,9 +94,38 @@ if (tscElectronResult.status !== 0) {
 }
 
 for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+  const dirResult = runNodeScript("node_modules/electron-builder/cli.js", [
+    "--win",
+    "dir",
+    "--config.npmRebuild=false",
+    "--config.win.signAndEditExecutable=false"
+  ]);
+  if (dirResult.status !== 0) {
+    process.exit(dirResult.status ?? 1);
+  }
+
+  if (!fs.existsSync(unpackedExe)) {
+    process.stderr.write(`Cannot find unpacked executable: ${unpackedExe}\n`);
+    process.exit(1);
+  }
+
+  if (fs.existsSync(iconPath)) {
+    await rcedit(unpackedExe, {
+      icon: iconPath,
+      "file-version": "2.0.0",
+      "product-version": "2.0.0",
+      "version-string": {
+        ProductName: "NES Emulator 2",
+        FileDescription: "NES emulator with online netplay support"
+      }
+    });
+  }
+
   const builderResult = runNodeScript("node_modules/electron-builder/cli.js", [
     "--win",
     "nsis",
+    "--prepackaged",
+    "dist/win-unpacked",
     "--config.npmRebuild=false",
     "--config.win.signAndEditExecutable=false"
   ]);

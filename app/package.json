@@ -1,6 +1,6 @@
 {
   "name": "nes-netplay-emulator-app",
-  "version": "1.0.1",
+  "version": "2.0.1",
   "description": "NES emulator with online netplay support",
   "author": "dilukliu0-cyber",
   "private": true,
@@ -30,6 +30,7 @@
   "dependencies": {
     "electron-updater": "^6.6.2",
     "jsnes": "^1.2.1",
+    "nostalgist": "^0.21.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "snes9x-next": "^1.0.0",
@@ -48,21 +49,32 @@
     "electron": "^34.0.0",
     "electron-builder": "^25.1.8",
     "png-to-ico": "^3.0.1",
+    "rcedit": "^5.0.2",
     "typescript": "^5.7.3",
     "vite": "^6.0.5",
     "wait-on": "^8.0.1"
   },
   "build": {
-    "appId": "com.mvp.nesnetplay",
-    "productName": "NES Emulator 1.01",
+    "appId": "com.mvp.nesnetplay2",
+    "productName": "NES Emulator 2",
     "artifactName": "NES Emulator Setup ${version}.${ext}",
     "files": [
       "dist/renderer/**/*",
       "dist-electron/**/*",
       "package.json"
     ],
+    "extraResources": [
+      {
+        "from": "build/icon.ico",
+        "to": "build/icon.ico"
+      },
+      {
+        "from": "build/icon.png",
+        "to": "build/icon.png"
+      }
+    ],
     "extraMetadata": {
-      "displayVersion": "1.01"
+      "displayVersion": "2"
     },
     "directories": {
       "buildResources": "build"
@@ -77,7 +89,7 @@
     },
     "win": {
       "target": "nsis",
-      "executableName": "NES Emulator 1.01",
+      "executableName": "NES Emulator 2",
       "icon": "build/icon.ico"
     },
     "nsis": {

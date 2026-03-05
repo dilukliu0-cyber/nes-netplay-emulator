@@ -1,0 +1,32 @@
+:root[data-theme="steam"] {
+  --bg-window: #0f1a26;
+  --bg-panel: #162534;
+  --bg-card: #1f3347;
+
+  --border: #2e4d68;
+  --border-rgb: 46, 77, 104;
+
+  --text-primary: #c7d5e0;
+  --text-primary-rgb: 199, 213, 224;
+
+  --text-secondary: #8f98a0;
+  --text-secondary-rgb: 143, 152, 160;
+
+  --accent: #66c0f4;
+  --accent-hover: #7bcaf7;
+  --accent-pressed: #4da7dc;
+  --text-on-accent: #0b1a24;
+
+  --border-op: 0.62;
+  --button-border-op: 0.48;
+
+  --text-title-op: 0.94;
+  --text-body-op: 0.9;
+  --text-secondary-op: 0.84;
+
+  --shadow-color: 7, 14, 20;
+  --shadow-big-op: 0.32;
+  --shadow-card-op: 0.26;
+  --shadow-btn-op: 0.2;
+  --shadow-sec-op: 0.16;
+}

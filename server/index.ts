@@ -60,6 +60,9 @@ interface IncomingMessage {
 const PORT = Number(process.env.SIGNALING_PORT || 8787);
 const dataDir = path.join(__dirname, "data");
 const usersFile = path.join(dataDir, "users.json");
+const MAX_INBOUND_MESSAGE_BYTES = 16 * 1024 * 1024;
+const MAX_AVATAR_DATA_URL_LENGTH = 1_000_000;
+const MAX_ROM_BASE64_LENGTH = 12 * 1024 * 1024;
 
 function ensureUsersFile(): void {
   fs.mkdirSync(dataDir, { recursive: true });
@@ -87,6 +90,8 @@ const socketsByUserId = new Map<string, Set<WebSocket>>();
 const socketUser = new Map<WebSocket, string>();
 const rooms = new Map<string, RoomRecord>();
 const invites = new Map<string, InviteRecord>();
+const hostSessionWatchdogByRoomId = new Map<string, ReturnType<typeof setTimeout>>();
+const HOST_SESSION_WATCHDOG_MS = 8000;
 
 function getUserById(userId: string): UserRecord | undefined {
   return users.find((u) => u.userId === userId);
@@ -174,6 +179,7 @@ function roomStatePayload(room: RoomRecord): {
   spectators: string[];
   locked: boolean;
   readyByUserId: string[];
+  session?: RoomRecord["session"];
 } {
   return {
     roomId: room.roomId,
@@ -182,8 +188,84 @@ function roomStatePayload(room: RoomRecord): {
     members: [...room.members],
     spectators: [...room.spectators],
     locked: room.locked,
-    readyByUserId: [...room.readyByUserId]
+    readyByUserId: [...room.readyByUserId],
+    session: room.session
   };
+}
+
+function clearHostSessionWatchdog(roomId: string): void {
+  const timer = hostSessionWatchdogByRoomId.get(roomId);
+  if (timer) {
+    clearTimeout(timer);
+    hostSessionWatchdogByRoomId.delete(roomId);
+  }
+}
+
+function cancelHostSessionWatchdogsForUser(userId: string): void {
+  for (const [roomId, timer] of hostSessionWatchdogByRoomId.entries()) {
+    const room = rooms.get(roomId);
+    if (!room || room.hostUserId !== userId) {
+      clearTimeout(timer);
+      hostSessionWatchdogByRoomId.delete(roomId);
+      continue;
+    }
+    clearTimeout(timer);
+    hostSessionWatchdogByRoomId.delete(roomId);
+  }
+}
+
+function scheduleHostSessionWatchdogsForUser(userId: string): void {
+  for (const room of rooms.values()) {
+    if (room.hostUserId !== userId || !room.session) {
+      continue;
+    }
+    if (hostSessionWatchdogByRoomId.has(room.roomId)) {
+      continue;
+    }
+    const roomId = room.roomId;
+    const timer = setTimeout(() => {
+      hostSessionWatchdogByRoomId.delete(roomId);
+      const nextRoom = rooms.get(roomId);
+      if (!nextRoom) {
+        return;
+      }
+      if (nextRoom.hostUserId !== userId) {
+        return;
+      }
+      if (isOnline(userId)) {
+        return;
+      }
+      if (!nextRoom.session) {
+        return;
+      }
+
+      // Host did not return in time: terminate session and room for all participants.
+      nextRoom.session = undefined;
+      nextRoom.readyByUserId = [];
+      sendEventToRoom(
+        nextRoom,
+        "session:stop",
+        {
+          roomId: nextRoom.roomId,
+          byUserId: userId
+        },
+        userId
+      );
+      for (const [inviteId, invite] of invites.entries()) {
+        if (invite.roomId === nextRoom.roomId) {
+          invites.delete(inviteId);
+        }
+      }
+      rooms.delete(nextRoom.roomId);
+      for (const memberId of nextRoom.members) {
+        if (memberId !== userId) {
+          sendEventToUser(memberId, "room:closed", { roomId: nextRoom.roomId });
+        }
+        broadcastPresence(memberId);
+      }
+    }, HOST_SESSION_WATCHDOG_MS);
+    hostSessionWatchdogByRoomId.set(roomId, timer);
+  }
 }
 
 function emitRoomUpdate(room: RoomRecord): void {
@@ -204,6 +286,12 @@ function removeUserFromRooms(userId: string): void {
     room.readyByUserId = room.readyByUserId.filter((id) => room.members.includes(id));
 
     if (room.members.length === 0) {
+      clearHostSessionWatchdog(room.roomId);
+      for (const [inviteId, invite] of invites.entries()) {
+        if (invite.roomId === room.roomId) {
+          invites.delete(inviteId);
+        }
+      }
       rooms.delete(room.roomId);
       continue;
     }
@@ -268,6 +356,17 @@ const wss = new WebSocketServer({ port: PORT });
 
 wss.on("connection", (ws) => {
   ws.on("message", (raw) => {
+    const inboundSizeBytes =
+      typeof raw === "string"
+        ? Buffer.byteLength(raw)
+        : raw instanceof Buffer
+          ? raw.byteLength
+          : Buffer.byteLength(String(raw));
+    if (inboundSizeBytes > MAX_INBOUND_MESSAGE_BYTES) {
+      sendResponse(ws, undefined, false, undefined, "Message too large");
+      return;
+    }
+
     let msg: IncomingMessage;
     try {
       msg = JSON.parse(String(raw)) as IncomingMessage;
@@ -287,6 +386,10 @@ wss.on("connection", (ws) => {
         sendResponse(ws, msg.requestId, false, undefined, "Invalid auth payload");
         return;
       }
+      if (avatarDataUrl.length > MAX_AVATAR_DATA_URL_LENGTH) {
+        sendResponse(ws, msg.requestId, false, undefined, "Avatar is too large");
+        return;
+      }
 
       const existing = getUserById(userId);
       if (existing) {
@@ -304,6 +407,7 @@ wss.on("connection", (ws) => {
       }
       saveUsers(users);
       setSocketUser(ws, userId);
+      cancelHostSessionWatchdogsForUser(userId);
       sendResponse(ws, msg.requestId, true, { userId });
       sendEventToUser(userId, "friends:list", friendsPayload(userId));
       broadcastPresence(userId);
@@ -360,6 +464,7 @@ wss.on("connection", (ws) => {
         sendResponse(ws, msg.requestId, false, undefined, "gameId is required");
         return;
       }
+      removeUserFromRooms(actorId);
 
       const roomId = uuidv4().slice(0, 8).toUpperCase();
       const room: RoomRecord = {
@@ -373,6 +478,7 @@ wss.on("connection", (ws) => {
         chat: []
       };
       rooms.set(roomId, room);
+      clearHostSessionWatchdog(roomId);
       sendResponse(ws, msg.requestId, true, roomStatePayload(room));
       return;
     }
@@ -392,6 +498,10 @@ wss.on("connection", (ws) => {
       if (room.session?.mode === "stream" && !room.members.includes(actorId) && !joinAsSpectator) {
         sendResponse(ws, msg.requestId, false, undefined, "Streaming room is full");
         return;
+      }
+      const currentRoom = findRoomByUser(actorId);
+      if (currentRoom && currentRoom.roomId !== roomId) {
+        removeUserFromRooms(actorId);
       }
 
       if (!room.members.includes(actorId)) {
@@ -600,6 +710,7 @@ wss.on("connection", (ws) => {
       }
 
       room.hostUserId = targetUserId;
+      clearHostSessionWatchdog(room.roomId);
       emitRoomUpdate(room);
       sendResponse(ws, msg.requestId, true, roomStatePayload(room));
       return;
@@ -632,7 +743,12 @@ wss.on("connection", (ws) => {
         sendResponse(ws, msg.requestId, false, undefined, "gameId, romBase64, emulatorId and romHash are required");
         return;
       }
+      if (romBase64.length > MAX_ROM_BASE64_LENGTH) {
+        sendResponse(ws, msg.requestId, false, undefined, "ROM payload is too large");
+        return;
+      }
 
+      room.gameId = gameId;
       room.session = {
         mode: "lockstep",
         gameId,
@@ -691,6 +807,7 @@ wss.on("connection", (ws) => {
         return;
       }
 
+      room.gameId = gameId;
       room.session = {
         mode: "stream",
         gameId,
@@ -839,6 +956,10 @@ wss.on("connection", (ws) => {
         sendResponse(ws, msg.requestId, false, undefined, "Session is not active");
         return;
       }
+      if (room.hostUserId !== actorId) {
+        sendResponse(ws, msg.requestId, false, undefined, "Only host can toggle room pause");
+        return;
+      }
       if (typeof paused !== "boolean") {
         sendResponse(ws, msg.requestId, false, undefined, "paused flag is required");
         return;
@@ -860,6 +981,43 @@ wss.on("connection", (ws) => {
       return;
     }
 
+    if (msg.type === "session:stop") {
+      const roomId = String(payload.roomId || "").trim().toUpperCase();
+      const room = rooms.get(roomId);
+      if (!room) {
+        sendResponse(ws, msg.requestId, false, undefined, "Room not found");
+        return;
+      }
+      if (!room.members.includes(actorId)) {
+        sendResponse(ws, msg.requestId, false, undefined, "Not a room member");
+        return;
+      }
+      if (room.hostUserId !== actorId) {
+        sendResponse(ws, msg.requestId, false, undefined, "Only host can stop session");
+        return;
+      }
+      if (!room.session) {
+        sendResponse(ws, msg.requestId, true, { stopped: false });
+        return;
+      }
+
+      room.session = undefined;
+      room.readyByUserId = [];
+      clearHostSessionWatchdog(room.roomId);
+      emitRoomUpdate(room);
+      sendEventToRoom(
+        room,
+        "session:stop",
+        {
+          roomId: room.roomId,
+          byUserId: actorId
+        },
+        actorId
+      );
+      sendResponse(ws, msg.requestId, true, { stopped: true });
+      return;
+    }
+
     if (msg.type === "room:close") {
       const roomId = String(payload.roomId || "").trim().toUpperCase();
       if (!roomId) {
@@ -877,6 +1035,12 @@ wss.on("connection", (ws) => {
       }
 
       if (room.hostUserId === actorId) {
+        clearHostSessionWatchdog(room.roomId);
+        for (const [inviteId, invite] of invites.entries()) {
+          if (invite.roomId === room.roomId) {
+            invites.delete(inviteId);
+          }
+        }
         rooms.delete(room.roomId);
         for (const memberId of room.members) {
           if (memberId !== actorId) {
@@ -988,6 +1152,10 @@ wss.on("connection", (ws) => {
         sendResponse(ws, msg.requestId, false, undefined, "Room is locked");
         return;
       }
+      const currentRoom = findRoomByUser(actorId);
+      if (currentRoom && currentRoom.roomId !== room.roomId) {
+        removeUserFromRooms(actorId);
+      }
 
       if (!room.members.includes(actorId)) {
         room.members.push(actorId);
@@ -1003,6 +1171,11 @@ wss.on("connection", (ws) => {
       return;
     }
 
+    if (msg.type === "ping") {
+      sendResponse(ws, msg.requestId, true, { ts: Date.now() });
+      return;
+    }
+
     sendResponse(ws, msg.requestId, false, undefined, `Unknown type: ${msg.type}`);
   });
 
@@ -1010,7 +1183,14 @@ wss.on("connection", (ws) => {
     const userId = socketUser.get(ws);
     dropSocketUser(ws);
     if (userId) {
-      removeUserFromRooms(userId);
+      if (!isOnline(userId)) {
+        const hasHostedActiveSession = Array.from(rooms.values()).some((room) => room.hostUserId === userId && Boolean(room.session));
+        if (hasHostedActiveSession) {
+          scheduleHostSessionWatchdogsForUser(userId);
+        } else {
+          removeUserFromRooms(userId);
+        }
+      }
       broadcastPresence(userId);
     }
   });

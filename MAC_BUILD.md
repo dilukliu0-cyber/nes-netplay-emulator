@@ -1,52 +1,72 @@
-# macOS Build + Online Setup
+# macOS сборка (подготовлено)
 
-You cannot build signed macOS artifacts directly on Windows, but you can build them from this repo using GitHub Actions (`macos-latest` runner).
+## Важно
+- Полноценную macOS сборку нужно делать на macOS (или через GitHub Actions с `macos-latest`).
+- На Windows `.dmg`/`.app` корректно не собираются.
 
-## 1. Build macOS artifacts from GitHub
+## 1. Быстрая локальная сборка на Mac
 
-1. Push your latest changes to `main`.
-2. Open GitHub -> `Actions` -> `Build macOS App`.
-3. Click `Run workflow`.
-4. After success, open the run and download artifact `macos-build`.
+Требования:
+- Node.js 20+
+- Xcode Command Line Tools (`xcode-select --install`)
 
-Output files:
-- `*.dmg`
-- `*.zip`
-
-## 2. Local macOS build (if you have a Mac)
+Команды:
 
 ```bash
 cd nes-netplay-emulator/app
-npm i
+npm install
+npm run dist:mac:dir
+```
+
+Результат:
+- Папка приложения: `app/dist/mac/`
+
+Если нужен `.dmg`:
+
+```bash
+cd nes-netplay-emulator/app
 npm run dist:mac
 ```
 
-Output file:
+Результат:
 - `app/dist/*.dmg`
 
-## 3. Configure online server URL (important)
+## 2. Подпись и notarization (когда будешь выкладывать)
 
-Set the same public signaling URL for both app and server clients.
+Для подписанной сборки задай переменные на Mac:
 
-Example:
+```bash
+export CSC_NAME="Developer ID Application: YOUR NAME (TEAMID)"
+export APPLE_ID="you@example.com"
+export APPLE_APP_SPECIFIC_PASSWORD="xxxx-xxxx-xxxx-xxxx"
+export APPLE_TEAM_ID="TEAMID"
+```
+
+Дальше обычная команда:
 
 ```bash
 cd nes-netplay-emulator/app
-export VITE_SIGNALING_URL="wss://your-domain-or-ip:8787"
-export SIGNALING_URL="wss://your-domain-or-ip:8787"
+npm run dist:mac
 ```
 
-Notes:
-- Use `wss://` for internet/public use.
-- Do not use `ws://localhost:8787` if users connect from different devices.
+## 3. Сборка через GitHub Actions
 
-## 4. Start signaling server
+1. Запушь изменения в репозиторий.
+2. Открой `Actions` -> workflow для macOS сборки.
+3. Нажми `Run workflow`.
+4. Скачай artifacts (`.dmg`/`.zip`).
 
-On your server machine:
+## 4. Онлайн настройки для Mac клиента
+
+Перед запуском проверь URL сигналинга:
+- в приложении: `Settings -> Server -> Signaling server`
+- используй `wss://...` для публичного сервера
+
+Пример сервера:
 
 ```bash
 cd nes-netplay-emulator/server
 SIGNALING_PORT=8787 npm run dev
 ```
 
-Make sure port `8787` is open and reachable from both Windows and macOS clients.
+Порт `8787` должен быть открыт извне.

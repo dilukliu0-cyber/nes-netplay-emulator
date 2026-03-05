@@ -1,4 +1,4 @@
-﻿import { useEffect, useRef, useState } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 import type { GameRecord } from "../types/global";
 import { Badge } from "./ui/Badge";
 import { Button } from "./ui/Button";
@@ -28,6 +28,36 @@ type ContextState = {
   y: number;
 };
 
+const ROW_HEIGHT = 56;
+const ROW_SIZE = 62;
+const OVERSCAN = 8;
+
+function LazyLibraryThumb(props: { src?: string; alt: string; fallbackText: string }) {
+  const { src, alt, fallbackText } = props;
+  const imgRef = useRef<HTMLImageElement | null>(null);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const el = imgRef.current;
+    if (!el || !src) {
+      return;
+    }
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        setVisible(true);
+        observer.disconnect();
+      }
+    }, { rootMargin: "120px" });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [src]);
+
+  if (!src) {
+    return <div className="library-thumb placeholder">{fallbackText}</div>;
+  }
+  return <img ref={imgRef} className="library-thumb" src={visible ? src : ""} alt={alt} loading="lazy" decoding="async" />;
+}
+
 export function SidebarLibrary({
   games,
   selectedId,
@@ -43,8 +73,11 @@ export function SidebarLibrary({
 }: SidebarLibraryProps) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [context, setContext] = useState<ContextState | null>(null);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [viewportHeight, setViewportHeight] = useState(420);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const contextRef = useRef<HTMLDivElement | null>(null);
+  const viewportRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (searchOpen) {
@@ -75,6 +108,26 @@ export function SidebarLibrary({
     };
   }, [context]);
 
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) {
+      return;
+    }
+    const updateHeight = () => setViewportHeight(viewport.clientHeight || 420);
+    updateHeight();
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(viewport);
+    return () => observer.disconnect();
+  }, []);
+
+  const totalHeight = games.length * ROW_SIZE;
+  const range = useMemo(() => {
+    const start = Math.max(0, Math.floor(scrollTop / ROW_SIZE) - OVERSCAN);
+    const end = Math.min(games.length, Math.ceil((scrollTop + viewportHeight) / ROW_SIZE) + OVERSCAN);
+    return { start, end };
+  }, [games.length, scrollTop, viewportHeight]);
+  const visibleGames = games.slice(range.start, range.end);
+
   return (
     <Card className="library-panel">
       <SectionHeader title="Библиотека" extra={<Badge>NES</Badge>} />
@@ -97,39 +150,41 @@ export function SidebarLibrary({
         />
       </div>
 
-      <div className="library-list">
-        {games.map((game) => (
-          <ListItem
-            key={game.id}
-            active={game.id === selectedId}
-            className="library-item"
-            onClick={() => onSelectGame(game.id)}
-            onContextMenu={(event) => {
-              event.preventDefault();
-              setContext({
-                game,
-                x: event.clientX,
-                y: event.clientY
-              });
-            }}
-          >
-            <div className="library-thumb-wrap">
-              {covers[game.id] ? (
-                <img className="library-thumb" src={covers[game.id] || ""} alt={game.name} />
-              ) : raImagesByGameId[game.id] ? (
-                <img className="library-thumb" src={raImagesByGameId[game.id]} alt={game.name} />
-              ) : (
-                <div className="library-thumb placeholder">{game.name.slice(0, 2).toUpperCase()}</div>
-              )}
-            </div>
-            <span className="library-title">{game.name}</span>
-            {showAchievementProgress && game.retroAchievementsGameId && raSummaryByGameId[game.id] && (
-              <span className="library-achievement-progress">
-                {raSummaryByGameId[game.id].unlocked}/{raSummaryByGameId[game.id].total} достижений
-              </span>
-            )}
-          </ListItem>
-        ))}
+      <div
+        ref={viewportRef}
+        className="library-list library-list-virtual"
+        onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}
+      >
+        <div className="library-virtual-canvas" style={{ height: `${totalHeight}px` }}>
+          {visibleGames.map((game, offset) => {
+            const index = range.start + offset;
+            const thumbSrc = (covers[game.id] || raImagesByGameId[game.id] || "");
+            return (
+              <div key={game.id} className="library-virtual-row" style={{ top: `${index * ROW_SIZE}px`, height: `${ROW_SIZE}px` }}>
+                <ListItem
+                  active={game.id === selectedId}
+                  className="library-item library-item-virtual"
+                  style={{ minHeight: `${ROW_HEIGHT}px` }}
+                  onClick={() => onSelectGame(game.id)}
+                  onContextMenu={(event) => {
+                    event.preventDefault();
+                    setContext({ game, x: event.clientX, y: event.clientY });
+                  }}
+                >
+                  <div className="library-thumb-wrap">
+                    <LazyLibraryThumb src={thumbSrc} alt={game.name} fallbackText={game.name.slice(0, 2).toUpperCase()} />
+                  </div>
+                  <span className="library-title">{game.name}</span>
+                  {showAchievementProgress && game.retroAchievementsGameId && raSummaryByGameId[game.id] && (
+                    <span className="library-achievement-progress">
+                      {raSummaryByGameId[game.id].unlocked}/{raSummaryByGameId[game.id].total} достижений
+                    </span>
+                  )}
+                </ListItem>
+              </div>
+            );
+          })}
+        </div>
         {games.length === 0 && <div className="empty-hint">Игры не найдены</div>}
       </div>
 
@@ -143,10 +198,7 @@ export function SidebarLibrary({
         <div
           ref={contextRef}
           className="library-context-menu"
-          style={{
-            top: context.y,
-            left: context.x
-          }}
+          style={{ top: context.y, left: context.x }}
         >
           <button
             type="button"
@@ -164,4 +216,3 @@ export function SidebarLibrary({
     </Card>
   );
 }
-

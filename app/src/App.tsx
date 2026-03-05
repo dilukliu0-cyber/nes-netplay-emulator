@@ -1,10 +1,10 @@
-﻿import { useEffect, useMemo, useRef, useState } from "react";
+﻿import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import { Controller, NES } from "jsnes";
 import { SocialClient } from "./core/socialClient";
+import type { SocialConnectionState } from "./core/socialClient";
 import { detectEmulatorByExt } from "./emulators/detect";
 import { getEmulator } from "./emulators/registry";
-import { SnesGameView } from "./emulators/snes/SnesGameView";
 import { t } from "./i18n";
 import { Badge } from "./components/ui/Badge";
 import { Button } from "./components/ui/Button";
@@ -14,9 +14,13 @@ import { ListItem } from "./components/ui/ListItem";
 import { SectionHeader } from "./components/ui/SectionHeader";
 import { SidebarLibrary } from "./components/SidebarLibrary";
 import { NetplayHeader } from "./components/NetplayHeader";
-import { SettingsModal } from "./screens/Settings/SettingsModal";
+import { AppTopbar } from "./components/AppTopbar";
+import { GameMetaStats } from "./components/GameMetaStats";
 import { applyTheme } from "./theme/themeManager";
 import { getGameData as getRetroGameData, pickGameImage } from "./services/raService";
+import heroSideGif from "./assets/giffffffffff.gif";
+import achievementsIcon from "./assets/achievements-icon.png";
+import inviteNotificationSound from "./assets/invite-notification.mp3";
 import type {
   AudioSettings,
   ControlSettings,
@@ -24,22 +28,22 @@ import type {
   FriendItem,
   GameRecord,
   InvitePayload,
-  LocalSignalingServerStatus,
   NetworkSettings,
-  NgrokTunnelStatus,
   Profile,
   RetroApiKeyStatus,
   RetroGameAchievements,
-  ReplaySettings,
   RoomState,
   UiSettings,
   VideoSettings
 } from "./types/global";
 
+const SnesGameView = lazy(async () => ({ default: (await import("./emulators/snes/SnesGameView")).SnesGameView }));
+const SettingsModal = lazy(async () => ({ default: (await import("./screens/Settings/SettingsModal")).SettingsModal }));
+
 type GameMode = "solo" | "room";
 type MainBottomTab = "network" | "friends";
 type ControlAction = keyof ControlSettings;
-type SettingsCategory = "general" | "controls" | "video" | "audio" | "network" | "library" | "about";
+type SettingsCategory = "account" | "server" | "controls" | "audio" | "about";
 type NetplayConfig = {
   enabled: boolean;
   social: SocialClient;
@@ -71,25 +75,10 @@ const defaultControls: ControlSettings = {
   select: "ShiftRight"
 };
 
-const defaultAudioSettings: AudioSettings = { enabled: true, volume: 80, latency: 0 };
+const defaultAudioSettings: AudioSettings = { enabled: true, volume: 80, latency: 120 };
 const defaultVideoSettings: VideoSettings = {
-  fullscreen: true,
-  scale: "fit",
-  pixelMode: "nearest",
-  crtEnabled: false,
-  scanlinesIntensity: 35,
-  bloom: 0,
-  vignette: false,
-  colorCorrection: false
-};
-const defaultReplaySettings: ReplaySettings = {
-  enabled: true,
-  hotkey: "F8",
-  prebufferSeconds: 10,
-  quality: "720p",
-  fps: 30,
-  format: "webm",
-  saveFolder: ""
+  targetFps: 60,
+  smoothing: true
 };
 const defaultNetworkSettings: NetworkSettings = {
   signalingUrl: (import.meta.env.VITE_SIGNALING_URL as string | undefined) || "ws://localhost:8787",
@@ -100,7 +89,8 @@ const defaultUiSettings: UiSettings = {
   libraryShowPlatformBadges: true,
   libraryEmulatorFilter: "all",
   theme: "blue",
-  retroAchievementsUsername: ""
+  retroAchievementsUsername: "",
+  inviteSoundEnabled: true
 };
 
 function b64ToBytes(base64: string): Uint8Array {
@@ -136,28 +126,50 @@ function formatPlayTime(total: number): string {
   return h <= 0 ? `${m} ${t("app.min")}` : `${h} ${t("app.hourShort")} ${r} ${t("app.min")}`;
 }
 
-function replaySuggestedName(gameName: string): string {
-  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-  const safeGame = gameName.replace(/[^a-zA-Z0-9_\-\s]/g, "").trim().replace(/\s+/g, "_") || "game";
-  return `${safeGame}_${stamp}.webm`;
-}
-
 function getRomExt(filePath: string): string {
   const dot = filePath.lastIndexOf(".");
   if (dot < 0) return "";
   return filePath.slice(dot).toLowerCase();
 }
 
-function resolveNetplayGame(payload: { gameId: string; gameName?: string; platform?: string }, games: GameRecord[]): GameRecord {
+function resolveNetplayGame(payload: { gameId: string; gameName?: string; platform?: string; emulatorId?: string }, games: GameRecord[]): GameRecord {
   const byId = games.find((g) => g.id === payload.gameId);
   if (byId) {
     return byId;
   }
-  const emulatorId: EmulatorId = payload.platform === "SNES" ? "snes" : "nes";
+  const normalizedEmulator = String(payload.emulatorId || "").toLowerCase();
+  const emulatorId: EmulatorId =
+    normalizedEmulator === "snes"
+      ? "snes"
+      : normalizedEmulator === "gb"
+        ? "gb"
+        : normalizedEmulator === "gba"
+          ? "gba"
+          : normalizedEmulator === "md"
+            ? "md"
+        : payload.platform === "SNES"
+          ? "snes"
+          : payload.platform === "GB"
+            ? "gb"
+            : payload.platform === "GBA"
+              ? "gba"
+              : payload.platform === "MD"
+                ? "md"
+            : "nes";
+  const platform =
+    emulatorId === "snes"
+      ? "SNES"
+      : emulatorId === "gb"
+        ? "GB"
+        : emulatorId === "gba"
+          ? "GBA"
+          : emulatorId === "md"
+            ? "MD"
+            : "NES";
   return {
     id: payload.gameId,
     name: payload.gameName || "Netplay Session",
-    platform: payload.platform === "SNES" ? "SNES" : "NES",
+    platform,
     emulatorId,
     path: "",
     sha256: "",
@@ -174,7 +186,7 @@ const INPUT_BIT_A = 1 << 4;
 const INPUT_BIT_B = 1 << 5;
 const INPUT_BIT_START = 1 << 6;
 const INPUT_BIT_SELECT = 1 << 7;
-const LOCKSTEP_INPUT_DELAY_FRAMES = 3;
+const LOCKSTEP_INPUT_DELAY_FRAMES = 2;
 const COVER_OUTPUT_WIDTH = 640;
 const COVER_OUTPUT_HEIGHT = 360;
 const AVATAR_OUTPUT_SIZE = 512;
@@ -211,14 +223,19 @@ function GameView(props: {
   romBase64: string;
   controls: ControlSettings;
   videoSettings: VideoSettings;
-  replaySettings: ReplaySettings;
   netplay?: NetplayConfig;
   paused: boolean;
   pauseButtonLabel: string;
   pauseInfo?: string;
   audioEnabled: boolean;
+  audioVolume: number;
+  audioLatency: number;
   onToggleAudio: () => void;
   onTogglePause: () => void;
+  showRoomPauseAction: boolean;
+  roomPauseLabel: string;
+  onToggleRoomPause: () => void;
+  onVisualReady: () => void;
   onOpenSettings: () => void;
   onExit: () => void;
   onToast: (message: string) => void;
@@ -231,22 +248,14 @@ function GameView(props: {
   localUserId?: string;
 }) {
   const {
-    game, romBase64, controls, videoSettings, replaySettings, netplay, paused, pauseButtonLabel, pauseInfo, audioEnabled, onToggleAudio, onTogglePause, onOpenSettings, onExit, onToast,
+    game, romBase64, controls, videoSettings, netplay, paused, pauseButtonLabel, pauseInfo, audioEnabled, audioVolume, audioLatency, onToggleAudio, onTogglePause, showRoomPauseAction, roomPauseLabel, onToggleRoomPause, onVisualReady, onOpenSettings, onExit, onToast,
     showInGameChat, inGameChatSide, roomChatMessages, roomChatInput, onRoomChatInput, onSendRoomChat, localUserId
   } = props;
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const frameRef = useRef<ImageData | null>(null);
   const rafRef = useRef<number | null>(null);
   const runningRef = useRef(false);
-  const recorderRef = useRef<MediaRecorder | null>(null);
-  const prebufferRef = useRef<Array<{ blob: Blob; createdAt: number }>>([]);
-  const sessionChunksRef = useRef<Blob[]>([]);
-  const isSessionRecordingRef = useRef(false);
-  const sessionStartRef = useRef<number | null>(null);
-  const replayRef = useRef(replaySettings);
   const videoRef = useRef(videoSettings);
-  const [sessionSeconds, setSessionSeconds] = useState(0);
-  const [isSessionRecording, setIsSessionRecording] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [slotPreviewById, setSlotPreviewById] = useState<Record<SaveSlot, { savedAt?: string; screenshot?: string }>>({
     1: {},
@@ -261,8 +270,14 @@ function GameView(props: {
   const audioContextRef = useRef<AudioContext | null>(null);
   const audioGainRef = useRef<GainNode | null>(null);
   const audioNodeRef = useRef<ScriptProcessorNode | null>(null);
-  const audioQueueLRef = useRef<number[]>([]);
-  const audioQueueRRef = useRef<number[]>([]);
+  const audioBufferLRef = useRef<Float32Array | null>(null);
+  const audioBufferRRef = useRef<Float32Array | null>(null);
+  const audioWriteIndexRef = useRef(0);
+  const audioReadIndexRef = useRef(0);
+  const audioBufferedSamplesRef = useRef(0);
+  const audioLastLRef = useRef(0);
+  const audioLastRRef = useRef(0);
+  const visualReadyReportedRef = useRef(false);
 
   useEffect(() => {
     menuOpenRef.current = menuOpen;
@@ -270,6 +285,9 @@ function GameView(props: {
   useEffect(() => {
     pausedRef.current = paused;
   }, [paused]);
+  useEffect(() => {
+    visualReadyReportedRef.current = false;
+  }, [netplay?.roomId]);
   useEffect(() => {
     if (paused) {
       setMenuOpen(false);
@@ -298,34 +316,18 @@ function GameView(props: {
   }, [menuOpen, game, netplay?.enabled, netplay?.roomId]);
 
   useEffect(() => {
-    replayRef.current = replaySettings;
-  }, [replaySettings]);
-
-  useEffect(() => {
     videoRef.current = videoSettings;
   }, [videoSettings]);
 
   useEffect(() => {
     const gainNode = audioGainRef.current;
     if (gainNode) {
-      gainNode.gain.value = audioEnabled ? 0.8 : 0;
+      gainNode.gain.value = audioEnabled ? Math.max(0, Math.min(1, audioVolume / 100)) : 0;
     }
     if (audioEnabled && audioContextRef.current?.state === "suspended") {
       void audioContextRef.current.resume().catch(() => undefined);
     }
-  }, [audioEnabled]);
-
-  useEffect(() => {
-    if (!isSessionRecording) {
-      setSessionSeconds(0);
-      return;
-    }
-    const id = window.setInterval(() => {
-      if (!sessionStartRef.current) return;
-      setSessionSeconds(Math.floor((Date.now() - sessionStartRef.current) / 1000));
-    }, 300);
-    return () => window.clearInterval(id);
-  }, [isSessionRecording]);
+  }, [audioEnabled, audioVolume]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -334,21 +336,53 @@ function GameView(props: {
     if (!ctx) return;
 
     frameRef.current = ctx.createImageData(256, 240);
+    visualReadyReportedRef.current = false;
+    let lastDrawAt = 0;
+    const normalizedLatency = Math.max(40, Number(audioLatency) || 120);
+    const bufferSize = normalizedLatency <= 120 ? 1024 : normalizedLatency <= 260 ? 2048 : 4096;
+    const ringCapacity = Math.max(16384, bufferSize * 32);
+    audioBufferLRef.current = new Float32Array(ringCapacity);
+    audioBufferRRef.current = new Float32Array(ringCapacity);
+    audioWriteIndexRef.current = 0;
+    audioReadIndexRef.current = 0;
+    audioBufferedSamplesRef.current = 0;
+    audioLastLRef.current = 0;
+    audioLastRRef.current = 0;
     const AudioContextCtor = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (AudioContextCtor) {
       try {
         const context = new AudioContextCtor({ sampleRate: 44100 });
         const gainNode = context.createGain();
-        gainNode.gain.value = audioEnabled ? 0.8 : 0;
-        const audioNode = context.createScriptProcessor(1024, 0, 2);
+        gainNode.gain.value = audioEnabled ? Math.max(0, Math.min(1, audioVolume / 100)) : 0;
+        const audioNode = context.createScriptProcessor(bufferSize, 0, 2);
         audioNode.onaudioprocess = (event) => {
           const outL = event.outputBuffer.getChannelData(0);
           const outR = event.outputBuffer.getChannelData(1);
-          const queueL = audioQueueLRef.current;
-          const queueR = audioQueueRRef.current;
+          const ringL = audioBufferLRef.current;
+          const ringR = audioBufferRRef.current;
+          if (!ringL || !ringR) {
+            for (let i = 0; i < outL.length; i += 1) {
+              outL[i] = 0;
+              outR[i] = 0;
+            }
+            return;
+          }
           for (let i = 0; i < outL.length; i += 1) {
-            outL[i] = queueL.length > 0 ? (queueL.shift() as number) : 0;
-            outR[i] = queueR.length > 0 ? (queueR.shift() as number) : 0;
+            if (audioBufferedSamplesRef.current > 0) {
+              const readIndex = audioReadIndexRef.current;
+              const l = ringL[readIndex];
+              const r = ringR[readIndex];
+              outL[i] = l;
+              outR[i] = r;
+              audioLastLRef.current = l;
+              audioLastRRef.current = r;
+              audioReadIndexRef.current = (readIndex + 1) % ringCapacity;
+              audioBufferedSamplesRef.current -= 1;
+            } else {
+              // Hold last sample on underrun to avoid harsh crackle.
+              outL[i] = audioLastLRef.current * 0.985;
+              outR[i] = audioLastRRef.current * 0.985;
+            }
           }
         };
         audioNode.connect(gainNode);
@@ -367,6 +401,12 @@ function GameView(props: {
       onFrame: (frameBuffer: number[]) => {
         const frame = frameRef.current;
         if (!frame) return;
+        const drawFps = Math.max(30, Math.min(60, Number(videoRef.current.targetFps) || 60));
+        const now = performance.now();
+        if (now - lastDrawAt < 1000 / drawFps) {
+          return;
+        }
+        lastDrawAt = now;
 
         // jsnes frame format is 0x00BBGGRR.
         for (let i = 0; i < frameBuffer.length; i += 1) {
@@ -378,18 +418,29 @@ function GameView(props: {
           frame.data[o + 3] = 255;
         }
 
-        ctx.imageSmoothingEnabled = videoRef.current.pixelMode === "smooth";
+        ctx.imageSmoothingEnabled = videoRef.current.smoothing;
         ctx.putImageData(frame, 0, 0);
+        if (!visualReadyReportedRef.current) {
+          visualReadyReportedRef.current = true;
+          onVisualReady();
+        }
       },
       onAudioSample: (left: number, right: number) => {
-        const queueL = audioQueueLRef.current;
-        const queueR = audioQueueRRef.current;
-        queueL.push(left);
-        queueR.push(right);
-        if (queueL.length > 8192) {
-          queueL.splice(0, queueL.length - 4096);
-          queueR.splice(0, queueR.length - 4096);
+        const ringL = audioBufferLRef.current;
+        const ringR = audioBufferRRef.current;
+        if (!ringL || !ringR) {
+          return;
         }
+        if (audioBufferedSamplesRef.current >= ringCapacity - 1) {
+          // Overflow: drop the oldest sample.
+          audioReadIndexRef.current = (audioReadIndexRef.current + 1) % ringCapacity;
+          audioBufferedSamplesRef.current -= 1;
+        }
+        const writeIndex = audioWriteIndexRef.current;
+        ringL[writeIndex] = left;
+        ringR[writeIndex] = right;
+        audioWriteIndexRef.current = (writeIndex + 1) % ringCapacity;
+        audioBufferedSamplesRef.current += 1;
       }
     });
     nesRef.current = nes;
@@ -436,6 +487,7 @@ function GameView(props: {
     let localInputState = 0;
     let previousLocalAppliedState = 0;
     let previousRemoteAppliedState = 0;
+    let lastRemoteKnownState = 0;
     let currentFrame = 0;
     let plannedLocalFrame = 0;
     const localStateByFrame = new Map<number, number>();
@@ -472,6 +524,7 @@ function GameView(props: {
         if (payload.fromUserId === netplay!.localUserId) {
           return;
         }
+        lastRemoteKnownState = payload.state;
         remoteStateByFrame.set(payload.frame, payload.state);
       });
     }
@@ -517,13 +570,6 @@ function GameView(props: {
       }
       if (menuOpenRef.current) return;
 
-      const normalizedHotkey = replayRef.current.hotkey.toUpperCase();
-      if (replayRef.current.enabled && e.code.toUpperCase() === normalizedHotkey) {
-        e.preventDefault();
-        void toggleReplaySession();
-        return;
-      }
-
       const b = map[e.code];
       if (b !== undefined) {
         e.preventDefault();
@@ -550,12 +596,19 @@ function GameView(props: {
       }
     };
 
+    let lastFrameAt = performance.now();
+    let frameAccumulatorMs = 0;
     const loop = () => {
       if (!runningRef.current) return;
       if (pausedRef.current) {
         rafRef.current = requestAnimationFrame(loop);
         return;
       }
+      const now = performance.now();
+      const frameDurationMs = 1000 / 60;
+      const elapsedMs = Math.min(120, Math.max(0, now - lastFrameAt));
+      lastFrameAt = now;
+      frameAccumulatorMs += elapsedMs;
 
       if (isLockstepNetplay) {
         while (plannedLocalFrame <= currentFrame + LOCKSTEP_INPUT_DELAY_FRAMES) {
@@ -565,12 +618,13 @@ function GameView(props: {
         }
 
         let steps = 0;
-        while (steps < 2) {
+        while (frameAccumulatorMs >= frameDurationMs && steps < 2) {
+          frameAccumulatorMs -= frameDurationMs;
           const localFrameState = localStateByFrame.get(currentFrame);
-          const remoteFrameState = remoteStateByFrame.get(currentFrame);
-          if (localFrameState === undefined || remoteFrameState === undefined) {
+          if (localFrameState === undefined) {
             break;
           }
+          const remoteFrameState = remoteStateByFrame.get(currentFrame) ?? lastRemoteKnownState;
 
           previousLocalAppliedState = applyMaskToPlayer(localPlayer, previousLocalAppliedState, localFrameState);
           previousRemoteAppliedState = applyMaskToPlayer(remotePlayer, previousRemoteAppliedState, remoteFrameState);
@@ -593,11 +647,21 @@ function GameView(props: {
           }
         }
       } else {
-        if (isStreamHost) {
-          previousLocalAppliedState = applyMaskToPlayer(localPlayer, previousLocalAppliedState, localInputState);
-          previousRemoteAppliedState = applyMaskToPlayer(remotePlayer, previousRemoteAppliedState, remoteStreamInputState);
+        let steps = 0;
+        while (frameAccumulatorMs >= frameDurationMs && steps < 3) {
+          frameAccumulatorMs -= frameDurationMs;
+          steps += 1;
+          if (isStreamHost) {
+            previousLocalAppliedState = applyMaskToPlayer(localPlayer, previousLocalAppliedState, localInputState);
+            previousRemoteAppliedState = applyMaskToPlayer(remotePlayer, previousRemoteAppliedState, remoteStreamInputState);
+          }
+          nes.frame();
         }
-        nes.frame();
+      }
+      if (isLockstepNetplay) {
+        frameAccumulatorMs = Math.min(frameDurationMs * 3, frameAccumulatorMs);
+      } else {
+        frameAccumulatorMs = Math.min(frameDurationMs * 2, frameAccumulatorMs);
       }
 
       rafRef.current = requestAnimationFrame(loop);
@@ -622,8 +686,13 @@ function GameView(props: {
       audioContextRef.current = null;
       audioGainRef.current = null;
       audioNodeRef.current = null;
-      audioQueueLRef.current = [];
-      audioQueueRRef.current = [];
+      audioBufferLRef.current = null;
+      audioBufferRRef.current = null;
+      audioWriteIndexRef.current = 0;
+      audioReadIndexRef.current = 0;
+      audioBufferedSamplesRef.current = 0;
+      audioLastLRef.current = 0;
+      audioLastRRef.current = 0;
       saveState(SAVE_SLOT_AUTO, true);
       if (isLockstepNetplay) {
         netplay!.social.onNetplayInput(() => undefined);
@@ -632,7 +701,7 @@ function GameView(props: {
         netplay!.social.onStreamInput(() => undefined);
       }
     };
-  }, [romBase64, controls, netplay]);
+  }, [romBase64, controls, netplay, audioEnabled, audioVolume, audioLatency, onVisualReady]);
 
   function saveState(slot: SaveSlotId = SAVE_SLOT_DEFAULT, silent = false) {
     const roomScope = netplay?.enabled ? netplay.roomId : undefined;
@@ -821,129 +890,14 @@ function GameView(props: {
     };
   }, [netplay]);
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const stopRecorder = () => {
-      const rec = recorderRef.current;
-      if (rec && rec.state !== "inactive") rec.stop();
-      recorderRef.current = null;
-      prebufferRef.current = [];
-      if (isSessionRecordingRef.current) {
-        isSessionRecordingRef.current = false;
-        setIsSessionRecording(false);
-        sessionChunksRef.current = [];
-      }
-    };
-
-    if (!replaySettings.enabled || typeof MediaRecorder === "undefined") {
-      stopRecorder();
-      return;
-    }
-
-    const stream = canvas.captureStream(replaySettings.fps);
-    const preferred = "video/webm;codecs=vp8,opus";
-    const mimeType = MediaRecorder.isTypeSupported(preferred) ? preferred : "video/webm";
-    const recorder = new MediaRecorder(stream, { mimeType });
-
-    recorder.ondataavailable = (event: BlobEvent) => {
-      if (!event.data || event.data.size === 0) return;
-      const now = Date.now();
-      prebufferRef.current.push({ blob: event.data, createdAt: now });
-
-      const cutoff = now - replayRef.current.prebufferSeconds * 1000;
-      while (prebufferRef.current.length && prebufferRef.current[0].createdAt < cutoff) {
-        prebufferRef.current.shift();
-      }
-
-      if (isSessionRecordingRef.current) sessionChunksRef.current.push(event.data);
-    };
-
-    recorder.start(250);
-    recorderRef.current = recorder;
-
-    return () => {
-      stopRecorder();
-      stream.getTracks().forEach((t) => t.stop());
-    };
-  }, [replaySettings.enabled, replaySettings.fps]);
-
-  const toggleReplaySession = async () => {
-    if (!replayRef.current.enabled) {
-      onToast("Replay is disabled in settings");
-      return;
-    }
-    if (!recorderRef.current) {
-      onToast("Replay recorder is not initialized");
-      return;
-    }
-
-    if (!isSessionRecordingRef.current) {
-      sessionChunksRef.current = prebufferRef.current.map((c) => c.blob);
-      isSessionRecordingRef.current = true;
-      setIsSessionRecording(true);
-      sessionStartRef.current = Date.now();
-      onToast(`Replay started (prebuffer ${replayRef.current.prebufferSeconds}s)`);
-      return;
-    }
-
-    isSessionRecordingRef.current = false;
-    setIsSessionRecording(false);
-    const chunks = [...sessionChunksRef.current];
-    sessionChunksRef.current = [];
-    sessionStartRef.current = null;
-
-    if (!chunks.length) {
-      onToast("Replay is empty");
-      return;
-    }
-
-    const blob = new Blob(chunks, { type: "video/webm" });
-    const bytes = new Uint8Array(await blob.arrayBuffer());
-    const saved = await window.bridge.replays.saveReplay({
-      suggestedName: replaySuggestedName(game.name),
-      bytes,
-      meta: {
-        emulatorId: game.emulatorId,
-        romHash: game.sha256,
-        gameId: game.id,
-        roomId: netplay?.roomId,
-        mode: netplay?.enabled ? "room" : "solo",
-        createdAt: new Date().toISOString()
-      }
-    }).catch(() => null);
-    if (!saved) {
-      onToast("Failed to save replay");
-      return;
-    }
-
-    onToast(`Saved: ${saved.path}`);
-  };
-
-  const scaleClass = `scale-${videoSettings.scale}`;
-  const pixelClass = videoSettings.pixelMode === "smooth" ? "pixels-smooth" : "pixels-nearest";
-  const scanlineOpacity = videoSettings.crtEnabled ? Math.max(0, Math.min(100, videoSettings.scanlinesIntensity)) / 100 : 0;
-  const bloomFactor = videoSettings.bloom / 100;
-  const canvasFilter = [
-    videoSettings.colorCorrection ? "contrast(1.04) saturate(1.06)" : "",
-    bloomFactor > 0 ? `brightness(${1 + bloomFactor * 0.12})` : ""
-  ].filter(Boolean).join(" ");
+  const scaleClass = "scale-fit";
+  const pixelClass = videoSettings.smoothing ? "pixels-smooth" : "pixels-nearest";
+  const canvasFilter = videoSettings.smoothing ? "blur(0.3px) contrast(1.03) saturate(1.04)" : "";
 
   return (
     <div className="game-view-root">
       <div className={`game-surface ${scaleClass}`}>
         <canvas ref={canvasRef} width={256} height={240} className={`game-canvas ${pixelClass}`} style={{ filter: canvasFilter || undefined }} aria-label={game.name} />
-        <div className="game-filter-overlay" style={{ opacity: scanlineOpacity }} />
-        {videoSettings.vignette && <div className="game-vignette" />}
-        {bloomFactor > 0 && <div className="game-glow" style={{ opacity: bloomFactor * 0.35 }} />}
-      </div>
-
-      <div className="replay-controls">
-        <Button variant={isSessionRecording ? "danger" : "secondary"} onClick={() => void toggleReplaySession()}>
-          {isSessionRecording ? "Stop" : "Replay"}
-        </Button>
-        <span className="replay-meta">Hotkey: {replaySettings.hotkey} {isSessionRecording ? `| ${sessionSeconds}s` : ""}</span>
       </div>
       {showInGameChat && (
         <InGameRoomChatPanel
@@ -964,6 +918,7 @@ function GameView(props: {
               <Button variant="secondary" onClick={() => setMenuOpen(false)}>{t("app.gameMenuContinue")}</Button>
               <Button variant="secondary" onClick={() => restartGame()}>Начать заново</Button>
               <Button variant="secondary" onClick={() => { onToggleAudio(); }}>{audioEnabled ? t("app.gameMenuSoundOn") : t("app.gameMenuSoundOff")}</Button>
+              {showRoomPauseAction && <Button variant="secondary" onClick={() => onToggleRoomPause()}>{roomPauseLabel}</Button>}
               <Button variant="secondary" onClick={() => { setMenuOpen(false); onOpenSettings(); }}>{t("app.gameMenuSettings")}</Button>
               <Button variant="danger" onClick={onExit}>{t("app.gameMenuExit")}</Button>
             </div>
@@ -1005,6 +960,10 @@ function StreamClientView(props: {
   audioEnabled: boolean;
   onToggleAudio: () => void;
   onTogglePause: () => void;
+  showRoomPauseAction: boolean;
+  roomPauseLabel: string;
+  onToggleRoomPause: () => void;
+  onVisualReady: () => void;
   onOpenSettings: () => void;
   onExit: () => void;
   onToast: (message: string) => void;
@@ -1017,10 +976,11 @@ function StreamClientView(props: {
   localUserId?: string;
 }) {
   const {
-    game, controls, netplay, paused, pauseButtonLabel, pauseInfo, audioEnabled, onToggleAudio, onTogglePause, onOpenSettings, onExit, onToast,
+    game, controls, netplay, paused, pauseButtonLabel, pauseInfo, audioEnabled, onToggleAudio, onTogglePause, showRoomPauseAction, roomPauseLabel, onToggleRoomPause, onVisualReady, onOpenSettings, onExit, onToast,
     showInGameChat, inGameChatSide, roomChatMessages, roomChatInput, onRoomChatInput, onSendRoomChat, localUserId
   } = props;
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const visualReadyReportedRef = useRef(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuOpenRef = useRef(false);
   const pausedRef = useRef(paused);
@@ -1032,10 +992,33 @@ function StreamClientView(props: {
     pausedRef.current = paused;
   }, [paused]);
   useEffect(() => {
+    visualReadyReportedRef.current = false;
+  }, [netplay.roomId]);
+  useEffect(() => {
     if (paused) {
       setMenuOpen(false);
     }
   }, [paused]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) {
+      return;
+    }
+    const markReady = () => {
+      if (visualReadyReportedRef.current) {
+        return;
+      }
+      visualReadyReportedRef.current = true;
+      onVisualReady();
+    };
+    video.addEventListener("loadeddata", markReady);
+    video.addEventListener("playing", markReady);
+    return () => {
+      video.removeEventListener("loadeddata", markReady);
+      video.removeEventListener("playing", markReady);
+    };
+  }, [onVisualReady]);
 
   useEffect(() => {
     if (!netplay.streamPeerUserId) {
@@ -1065,6 +1048,10 @@ function StreamClientView(props: {
       const [stream] = event.streams;
       if (videoRef.current && stream) {
         videoRef.current.srcObject = stream;
+        if (!visualReadyReportedRef.current) {
+          visualReadyReportedRef.current = true;
+          onVisualReady();
+        }
       }
     };
 
@@ -1115,7 +1102,7 @@ function StreamClientView(props: {
       netplay.social.onStreamSignal(() => undefined);
       pc.close();
     };
-  }, [netplay, onToast]);
+  }, [netplay, onToast, onVisualReady]);
 
   useEffect(() => {
     if (netplay.isSpectator) {
@@ -1202,6 +1189,7 @@ function StreamClientView(props: {
             <div className="in-game-menu-actions">
               <Button variant="secondary" onClick={() => setMenuOpen(false)}>{t("app.gameMenuContinue")}</Button>
               <Button variant="secondary" onClick={() => { onToggleAudio(); }}>{audioEnabled ? t("app.gameMenuSoundOn") : t("app.gameMenuSoundOff")}</Button>
+              {showRoomPauseAction && <Button variant="secondary" onClick={() => onToggleRoomPause()}>{roomPauseLabel}</Button>}
               <Button variant="secondary" onClick={() => { setMenuOpen(false); onOpenSettings(); }}>{t("app.gameMenuSettings")}</Button>
               <Button variant="danger" onClick={onExit}>{t("app.gameMenuExit")}</Button>
             </div>
@@ -1297,24 +1285,23 @@ export default function App() {
   const [raSummaryByGameId, setRaSummaryByGameId] = useState<Record<string, { unlocked: number; total: number }>>({});
   const [raImagesByGameId, setRaImagesByGameId] = useState<Record<string, string>>({});
   const [raGameIdInput, setRaGameIdInput] = useState("");
+  const [raIdEditorOpen, setRaIdEditorOpen] = useState(false);
   const [raReloadKey, setRaReloadKey] = useState(0);
   const [achievementsModalOpen, setAchievementsModalOpen] = useState(false);
   const [networkLatencyMs, setNetworkLatencyMs] = useState<number | null>(null);
   const [networkHealth, setNetworkHealth] = useState<"offline" | "good" | "degraded">("offline");
+  const [connectionState, setConnectionState] = useState<SocialConnectionState>("disconnected");
   const [toast, setToast] = useState("");
   const [networkSettings, setNetworkSettings] = useState<NetworkSettings>(defaultNetworkSettings);
   const [serverAddressInput, setServerAddressInput] = useState(defaultNetworkSettings.signalingUrl);
   const [networkBusy, setNetworkBusy] = useState(false);
-  const [localServerStatus, setLocalServerStatus] = useState<LocalSignalingServerStatus | null>(null);
-  const [localServerBusy, setLocalServerBusy] = useState(false);
-  const [ngrokStatus, setNgrokStatus] = useState<NgrokTunnelStatus | null>(null);
-  const [ngrokBusy, setNgrokBusy] = useState(false);
+  const [userScale, setUserScale] = useState(1);
   const [activeSession, setActiveSession] = useState<{ game: GameRecord; romBase64: string; netplay?: NetplayConfig } | null>(null);
+  const [sessionVisualReady, setSessionVisualReady] = useState(false);
   const [launchCheck, setLaunchCheck] = useState<{ ok: boolean; reason?: string }>({ ok: true });
   const [controls, setControls] = useState<ControlSettings>(defaultControls);
   const [audioSettings, setAudioSettings] = useState<AudioSettings>(defaultAudioSettings);
   const [videoSettings, setVideoSettings] = useState<VideoSettings>(defaultVideoSettings);
-  const [replaySettings, setReplaySettings] = useState<ReplaySettings>(defaultReplaySettings);
   const [uiSettings, setUiSettings] = useState<UiSettings>(defaultUiSettings);
   const [raApiKeyInput, setRaApiKeyInput] = useState("");
   const [raApiKeyStatus, setRaApiKeyStatus] = useState<RetroApiKeyStatus | null>(null);
@@ -1322,7 +1309,7 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [manualPause, setManualPause] = useState(false);
   const [remotePause, setRemotePause] = useState(false);
-  const [settingsCategory, setSettingsCategory] = useState<SettingsCategory>("general");
+  const [settingsCategory, setSettingsCategory] = useState<SettingsCategory>("account");
   const [waitingAction, setWaitingAction] = useState<ControlAction | null>(null);
   const [covers, setCovers] = useState<Record<string, string>>({});
   const [coverEditorOpen, setCoverEditorOpen] = useState(false);
@@ -1341,8 +1328,11 @@ export default function App() {
   const roomIdRef = useRef("");
   const roomStateRef = useRef<RoomState | null>(null);
   const profileRef = useRef<Profile | null>(null);
+  const uiSettingsRef = useRef<UiSettings>(defaultUiSettings);
+  const inviteAudioRef = useRef<HTMLAudioElement | null>(null);
   const gamesRef = useRef<GameRecord[]>([]);
   const socialRef = useRef<SocialClient | null>(null);
+  const activeSessionRef = useRef<{ game: GameRecord; romBase64: string; netplay?: NetplayConfig } | null>(null);
   const coverFileInputRef = useRef<HTMLInputElement | null>(null);
   const avatarFileInputRef = useRef<HTMLInputElement | null>(null);
   const roomChatListRef = useRef<HTMLDivElement | null>(null);
@@ -1401,6 +1391,7 @@ export default function App() {
   const selectedRomExt = useMemo(() => (selectedGame ? getRomExt(selectedGame.path) : ""), [selectedGame]);
   const isGamePaused = settingsOpen || manualPause || remotePause;
   const pauseButtonLabel = manualPause ? t("app.gameMenuResume") : t("app.gameMenuPause");
+  const roomPauseLabel = remotePause ? "Снять паузу для всех" : "Пауза для всех";
   const pauseInfo = useMemo(() => {
     const lines: string[] = [];
     if (settingsOpen) lines.push(t("app.gamePausedBySettings"));
@@ -1470,7 +1461,7 @@ export default function App() {
     return covers[selectedGame.id] || "";
   }, [covers, selectedGame, selectedGameRaCover]);
   const friendPresenceText = (friend: FriendItem): string => {
-    if (!friend.online) return "офлайн";
+    if (!friend.online) return "оффлайн";
     if (friend.inGame) return `играет в "${friend.gameName || "неизвестная игра"}"`;
     if (friend.roomId) return `в комнате ${friend.roomId}`;
     return "онлайн";
@@ -1494,6 +1485,37 @@ export default function App() {
     return "";
   }, [compatibilityWarning, launchCheck.ok, launchCheck.reason, selectedGame]);
 
+  useEffect(() => {
+    const clampScale = (value: number) => Math.min(1.25, Math.max(0.4, value));
+    const step = 0.05;
+    const handleWheel = (event: WheelEvent) => {
+      if (!event.ctrlKey || event.deltaY === 0) return;
+      event.preventDefault();
+      setUserScale((prev) => clampScale(prev - event.deltaY * 0.0015));
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!event.ctrlKey) return;
+      const key = event.key;
+      const code = event.code;
+      const isPlus = key === "+" || (key === "=" && event.shiftKey) || code === "Equal" || code === "NumpadAdd";
+      const isMinus = key === "-" || key === "_" || code === "Minus" || code === "NumpadSubtract";
+      if (!isPlus && !isMinus) return;
+      event.preventDefault();
+      event.stopPropagation();
+      setUserScale((prev) => clampScale(prev + (isPlus ? step : -step)));
+    };
+    window.addEventListener("wheel", handleWheel, { passive: false });
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => {
+      window.removeEventListener("wheel", handleWheel);
+      window.removeEventListener("keydown", handleKeyDown, true);
+    };
+  }, []);
+
+  const appScaleStyle = {
+    ["--user-scale" as string]: `${userScale}`
+  };
+
   const setCurrentRoom = (nextRoomId: string, hostUserId?: string) => {
     roomIdRef.current = nextRoomId;
     setRoomId(nextRoomId);
@@ -1514,9 +1536,163 @@ export default function App() {
     setRoomState(null);
   };
 
+  const restoreSessionFromRoomState = (nextRoom: RoomState, social: SocialClient): void => {
+    if (activeSessionRef.current || !nextRoom.session) {
+      return;
+    }
+    const localProfile = profileRef.current;
+    if (!localProfile) {
+      return;
+    }
+    const inRoom = nextRoom.members.includes(localProfile.userId) || nextRoom.spectators.includes(localProfile.userId);
+    if (!inRoom) {
+      return;
+    }
+    if (nextRoom.session.mode === "lockstep") {
+      if (localProfile.userId === nextRoom.hostUserId) {
+        return;
+      }
+      const sessionCheck = canAcceptNetplaySession({
+        gameId: nextRoom.session.gameId,
+        emulatorId: nextRoom.session.emulatorId,
+        romHash: nextRoom.session.romHash
+      });
+      if (!sessionCheck.ok) {
+        setToast(sessionCheck.reason);
+        return;
+      }
+      if (!nextRoom.session.romBase64) {
+        setToast("Невозможно восстановить сессию: ROM не передан сервером");
+        return;
+      }
+      setActiveSession({
+        game: sessionCheck.game,
+        romBase64: nextRoom.session.romBase64,
+        netplay: {
+          enabled: true,
+          social,
+          roomId: nextRoom.roomId,
+          localUserId: localProfile.userId,
+          hostUserId: nextRoom.hostUserId,
+          localPlayer: 2,
+          transport: "lockstep",
+          isSpectator: nextRoom.spectators.includes(localProfile.userId)
+        }
+      });
+      setManualPause(false);
+      setRemotePause(false);
+      setToast("Сессия восстановлена после переподключения");
+      return;
+    }
+    if (localProfile.userId === nextRoom.hostUserId) {
+      return;
+    }
+    const game = resolveNetplayGame(
+      {
+        gameId: nextRoom.session.gameId,
+        gameName: nextRoom.session.gameName,
+        platform: nextRoom.session.platform,
+        emulatorId: nextRoom.session.emulatorId
+      },
+      gamesRef.current
+    );
+    setActiveSession({
+      game,
+      romBase64: "",
+      netplay: {
+        enabled: true,
+        social,
+        roomId: nextRoom.roomId,
+        localUserId: localProfile.userId,
+        hostUserId: nextRoom.hostUserId,
+        localPlayer: 2,
+        transport: "stream",
+        isSpectator: nextRoom.spectators.includes(localProfile.userId),
+        streamPeerUserId: nextRoom.hostUserId
+      }
+    });
+    setManualPause(false);
+    setRemotePause(false);
+    setToast("Сессия восстановлена после переподключения");
+  };
+
+  const restoreRoomMembership = async (social: SocialClient) => {
+    const currentRoomId = roomIdRef.current;
+    const localProfile = profileRef.current;
+    if (!currentRoomId || !localProfile) {
+      return;
+    }
+    const wasSpectator = Boolean(roomStateRef.current?.spectators.includes(localProfile.userId));
+    const applyJoinedRoom = (nextRoom: RoomState) => {
+      applyRoomState(nextRoom);
+      setRoomStatus(`${t("app.roomConnected")} (${nextRoom.roomId})`);
+      setNetworkHealth("good");
+      restoreSessionFromRoomState(nextRoom, social);
+    };
+    const state = await social.getRoomState(currentRoomId).catch(() => null);
+    if (!state) {
+      const joined = await window.bridge.joinRoom(currentRoomId, wasSpectator).catch(() => null);
+      if (joined) {
+        applyJoinedRoom(joined);
+      } else {
+        clearRoomState();
+        setRoomStatus(t("app.roomNotConnected"));
+      }
+      return;
+    }
+    const inRoom = state.members.includes(localProfile.userId) || state.spectators.includes(localProfile.userId);
+    if (inRoom) {
+      applyJoinedRoom(state);
+      return;
+    }
+    const joined = await window.bridge.joinRoom(currentRoomId, wasSpectator).catch(() => null);
+    if (joined) {
+      applyJoinedRoom(joined);
+    } else {
+      clearRoomState();
+      setRoomStatus(t("app.roomNotConnected"));
+    }
+  };
+
   const attachSocialHandlers = (social: SocialClient) => {
+    social.onConnectionState((state: SocialConnectionState) => {
+      setConnectionState(state);
+      if (state === "connecting") {
+        setNetworkHealth("degraded");
+        return;
+      }
+      if (state === "reconnecting") {
+        setNetworkHealth("degraded");
+        if (roomIdRef.current) {
+          setRoomStatus("Переподключение к комнате...");
+        }
+        return;
+      }
+      if (state === "disconnected") {
+        setNetworkHealth("offline");
+        return;
+      }
+      setNetworkHealth("good");
+      void social.refreshFriends().catch(() => undefined);
+      void restoreRoomMembership(social);
+    });
     social.onFriends((items) => setFriends(items));
-    social.onInvite((invite) => setPendingInvite(invite));
+    social.onInvite((invite) => {
+      setPendingInvite(invite);
+      const audio = inviteAudioRef.current;
+      if (!audio) {
+        return;
+      }
+      if (!uiSettingsRef.current.inviteSoundEnabled) {
+        return;
+      }
+      try {
+        audio.currentTime = 0;
+      } catch {
+        // noop
+      }
+      void audio.play().catch(() => undefined);
+    });
     social.onPresence((p) => setFriends((prev) => prev.map((f) => (
       f.userId === p.userId
         ? {
@@ -1608,7 +1784,7 @@ export default function App() {
       if (!current || payload.roomId !== current) {
         return;
       }
-      setRemotePause(payload.paused);
+      setRemotePause(Boolean(payload.paused));
     });
     social.onRoomUpdate((nextRoom) => {
       applyRoomState(nextRoom);
@@ -1616,6 +1792,7 @@ export default function App() {
         setRoomStatus(`${t("app.roomConnected")} (${nextRoom.roomId})`);
       }
       setNetworkHealth("good");
+      restoreSessionFromRoomState(nextRoom, social);
     });
     social.onRoomClosed((payload) => {
       if (roomIdRef.current !== payload.roomId) {
@@ -1636,6 +1813,15 @@ export default function App() {
       setNetworkHealth("offline");
       setNetworkLatencyMs(null);
       setToast("You were removed from the room");
+    });
+    social.onSessionStop((payload) => {
+      if (roomIdRef.current !== payload.roomId) {
+        return;
+      }
+      setActiveSession((prev) => (prev?.netplay?.roomId === payload.roomId ? null : prev));
+      setRemotePause(false);
+      setManualPause(false);
+      setToast("Хост вышел из игры");
     });
     social.onRoomChat((message) => {
       if (roomIdRef.current !== message.roomId) {
@@ -1663,7 +1849,10 @@ export default function App() {
 
     const measure = async () => {
       const startedAt = performance.now();
-      const ok = await window.bridge.getRoomState(roomId).then(() => true).catch(() => false);
+      const social = socialRef.current;
+      const ok = social
+        ? await social.request("ping", { roomId }).then(() => true).catch(() => false)
+        : await window.bridge.getRoomState(roomId).then(() => true).catch(() => false);
       if (cancelled) {
         return;
       }
@@ -1694,6 +1883,25 @@ export default function App() {
   }, [profile]);
 
   useEffect(() => {
+    uiSettingsRef.current = uiSettings;
+  }, [uiSettings]);
+
+  useEffect(() => {
+    const audio = new Audio(inviteNotificationSound);
+    audio.preload = "auto";
+    audio.volume = 0.9;
+    inviteAudioRef.current = audio;
+    return () => {
+      try {
+        audio.pause();
+      } catch {
+        // noop
+      }
+      inviteAudioRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
     applyTheme(uiSettings.theme);
   }, [uiSettings.theme]);
 
@@ -1710,11 +1918,38 @@ export default function App() {
   }, [games]);
 
   useEffect(() => {
+    activeSessionRef.current = activeSession;
+  }, [activeSession]);
+
+  useEffect(() => {
     if (!activeSession) {
       setManualPause(false);
       setRemotePause(false);
+      setSessionVisualReady(false);
+      return;
     }
+    setSessionVisualReady(false);
   }, [activeSession]);
+
+  useEffect(() => {
+    if (!activeSession || sessionVisualReady) {
+      return;
+    }
+    const timeoutId = window.setTimeout(() => {
+      if (sessionVisualReady) {
+        return;
+      }
+      const session = activeSession;
+      if (session?.netplay && session.netplay.localUserId === session.netplay.hostUserId) {
+        void session.netplay.social.request("session:stop", { roomId: session.netplay.roomId }).catch(() => undefined);
+      }
+      setActiveSession(null);
+      setManualPause(false);
+      setRemotePause(false);
+      setToast("Черный экран: не получен первый кадр. Перезапусти игру.");
+    }, 12000);
+    return () => window.clearTimeout(timeoutId);
+  }, [activeSession, sessionVisualReady]);
 
   useEffect(() => {
     if (!filteredGames.length) {
@@ -1734,17 +1969,22 @@ export default function App() {
 
   const canAcceptNetplaySession = (payload: { gameId?: string; emulatorId?: string; romHash?: string }): { ok: true; game: GameRecord } | { ok: false; reason: string } => {
     const gameId = String(payload.gameId || "").trim();
-    if (!gameId) {
-      return { ok: false, reason: "Сессия не содержит gameId" };
+    const romHash = String(payload.romHash || "").trim().toLowerCase();
+
+    let localGame: GameRecord | undefined;
+    if (romHash) {
+      localGame = gamesRef.current.find((game) => game.sha256.toLowerCase() === romHash);
     }
-    const localGame = gamesRef.current.find((game) => game.id === gameId);
+    if (!localGame && gameId) {
+      localGame = gamesRef.current.find((game) => game.id === gameId);
+    }
     if (!localGame) {
       return { ok: false, reason: "Игра из комнаты не найдена в локальной библиотеке" };
     }
     if (payload.emulatorId && localGame.emulatorId !== payload.emulatorId) {
       return { ok: false, reason: `Несовпадение эмулятора: комната ${String(payload.emulatorId).toUpperCase()}, локально ${localGame.emulatorId.toUpperCase()}` };
     }
-    if (payload.romHash && localGame.sha256.toLowerCase() !== payload.romHash.toLowerCase()) {
+    if (romHash && localGame.sha256.toLowerCase() !== romHash) {
       return { ok: false, reason: "Несовпадение ROM (sha256). Подключение отклонено." };
     }
     return { ok: true, game: localGame };
@@ -1878,18 +2118,15 @@ export default function App() {
 
   useEffect(() => {
     const init = async () => {
-      const [loadedGames, loadedProfile, loadedNetwork, loadedControls, loadedAudio, loadedVideo, loadedReplay, loadedUi, loadedRaApiKeyStatus, loadedLocalServerStatus, loadedNgrokStatus] = await Promise.all([
+      const [loadedGames, loadedProfile, loadedNetwork, loadedControls, loadedAudio, loadedVideo, loadedUi, loadedRaApiKeyStatus] = await Promise.all([
         window.bridge.listGames(),
         window.bridge.getProfile(),
         window.bridge.getNetworkSettings().catch(() => defaultNetworkSettings),
         window.bridge.getControls().catch(() => defaultControls),
         window.bridge.getAudioSettings().catch(() => defaultAudioSettings),
         window.bridge.getVideoSettings().catch(() => defaultVideoSettings),
-        window.bridge.getReplaySettings().catch(() => defaultReplaySettings),
         window.bridge.getUiSettings().catch(() => defaultUiSettings),
-        window.bridge.getRaApiKeyStatus().catch(() => null),
-        window.bridge.getLocalServerStatus().catch(() => null),
-        window.bridge.getNgrokStatus().catch(() => null)
+        window.bridge.getRaApiKeyStatus().catch(() => null)
       ]);
 
       setGames(loadedGames);
@@ -1901,12 +2138,9 @@ export default function App() {
       setControls(loadedControls);
       setAudioSettings(loadedAudio);
       setVideoSettings(loadedVideo);
-      setReplaySettings(loadedReplay);
       const normalizedTheme = applyTheme(loadedUi.theme) as UiSettings["theme"];
       setUiSettings({ ...loadedUi, theme: normalizedTheme });
       setRaApiKeyStatus(loadedRaApiKeyStatus);
-      setLocalServerStatus(loadedLocalServerStatus);
-      setNgrokStatus(loadedNgrokStatus);
       networkUrlRef.current = loadedNetwork.signalingUrl;
 
       await Promise.all(loadedGames.filter((g) => g.hasCover).map((g) => loadCover(g.id)));
@@ -1929,6 +2163,7 @@ export default function App() {
 
   useEffect(() => {
     setRaGameIdInput(selectedGame?.retroAchievementsGameId ? String(selectedGame.retroAchievementsGameId) : "");
+    setRaIdEditorOpen(false);
   }, [selectedGame?.id, selectedGame?.retroAchievementsGameId]);
 
   useEffect(() => {
@@ -2094,8 +2329,6 @@ export default function App() {
   useEffect(() => {
     if (!settingsOpen) return;
     void refreshRaApiKeyStatus();
-    void refreshLocalServerStatus();
-    void refreshNgrokStatus();
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.code !== "Escape") return;
       event.preventDefault();
@@ -2160,8 +2393,46 @@ export default function App() {
       return;
     }
     applyGameUpdate(updated);
+    setRaIdEditorOpen(false);
     setRaReloadKey((prev) => prev + 1);
     setToast("RetroAchievements ID сохранен");
+  };
+
+  const runRoomLaunchPreflight = async (
+    game: GameRecord,
+    social: SocialClient,
+    localProfile: Profile
+  ): Promise<{ ok: true; room: RoomState } | { ok: false; reason: string }> => {
+    if (!roomId) {
+      return { ok: false, reason: "Сначала создай или подключись к комнате" };
+    }
+    const connected = await social.connect().then(() => true).catch(() => false);
+    if (!connected) {
+      return { ok: false, reason: "Нет подключения к серверу. Повтори запуск." };
+    }
+    const pingOk = await social.request("ping", { roomId }).then(() => true).catch(() => false);
+    if (!pingOk) {
+      return { ok: false, reason: "Сервер комнаты не отвечает" };
+    }
+    const remoteRoom = await social.getRoomState(roomId).catch(() => null);
+    if (!remoteRoom) {
+      return { ok: false, reason: "Не удалось получить состояние комнаты" };
+    }
+    const inRoom = remoteRoom.members.includes(localProfile.userId) || remoteRoom.spectators.includes(localProfile.userId);
+    if (!inRoom) {
+      return { ok: false, reason: "Ты больше не в этой комнате. Подключись заново." };
+    }
+    if (remoteRoom.hostUserId !== localProfile.userId) {
+      return { ok: false, reason: t("app.hostOnlyStart") };
+    }
+    if (remoteRoom.session && remoteRoom.session.gameId !== game.id) {
+      return { ok: false, reason: "В комнате уже запущена другая сессия" };
+    }
+    const players = remoteRoom.members.filter((memberId) => !remoteRoom.spectators.includes(memberId));
+    if (networkSettings.netplayMode === "stream" && players.length !== 2) {
+      return { ok: false, reason: t("app.streamNeedsOneGuest") };
+    }
+    return { ok: true, room: remoteRoom };
   };
 
   const onPlay = async () => {
@@ -2175,29 +2446,27 @@ export default function App() {
       setToast(preCheck.reason || "Game is not launchable");
       return;
     }
-    if (mode === "room" && roomId && socialRef.current && profile) {
-      let hostUserId = roomState?.hostUserId || roomHostUserId;
-      let roomMembers: string[] = roomState?.members ? [...roomState.members] : [];
-      if (!hostUserId || roomMembers.length === 0) {
-        const state = await window.bridge.getRoomState(roomId).catch(() => null);
-        if (state) {
-          applyRoomState(state);
-          hostUserId = state.hostUserId;
-          roomMembers = state.members;
+    if (mode === "room") {
+      if (!roomId || !socialRef.current || !profile) {
+        setToast("Сначала создай или подключись к комнате");
+        return;
+      }
+      const social = socialRef.current;
+      const preflight = await runRoomLaunchPreflight(selectedGame, social, profile);
+      if (!preflight.ok) {
+        setToast(preflight.reason);
+        if (preflight.reason.includes("подключ")) {
+          setNetworkHealth("offline");
         }
-      }
-      if (!hostUserId) {
-      setToast(t("app.roomStateUnavailable"));
         return;
       }
-      if (hostUserId !== profile.userId) {
-        setToast(t("app.hostOnlyStart"));
-        return;
-      }
+      const remoteRoom = preflight.room;
+      applyRoomState(remoteRoom);
+      const hostUserId = remoteRoom.hostUserId;
 
       const isStreamMode = networkSettings.netplayMode === "stream";
-      const currentSpectators = roomStateRef.current?.spectators || [];
-      const streamGuests = roomMembers
+      const currentSpectators = remoteRoom.spectators || [];
+      const streamGuests = remoteRoom.members
         .filter((memberId) => memberId !== profile.userId)
         .filter((memberId) => !currentSpectators.includes(memberId));
       const streamPeerUserId = streamGuests[0];
@@ -2211,7 +2480,7 @@ export default function App() {
         ...session,
         netplay: {
           enabled: true,
-          social: socialRef.current,
+          social,
           roomId,
           localUserId: profile.userId,
           hostUserId,
@@ -2221,8 +2490,8 @@ export default function App() {
         }
       });
       const started = isStreamMode
-        ? await socialRef.current.startStream(roomId, selectedGame.id, selectedGame.name, selectedGame.platform).catch(() => false)
-        : await socialRef.current.startNetplay(
+        ? await social.startStream(roomId, selectedGame.id, selectedGame.name, selectedGame.platform).catch(() => false)
+        : await social.startNetplay(
           roomId,
           selectedGame.id,
           selectedGame.name,
@@ -2324,6 +2593,10 @@ export default function App() {
       setToast("У друга нет активной комнаты");
       return;
     }
+    if (roomId && roomId !== friend.roomId) {
+      setToast("Сначала выйди из текущей комнаты");
+      return;
+    }
     try {
       const room = await window.bridge.joinRoom(friend.roomId, true);
       applyRoomState(room);
@@ -2369,78 +2642,6 @@ export default function App() {
     } finally {
       setNetworkBusy(false);
     }
-  };
-
-  const refreshLocalServerStatus = async () => {
-    const status = await window.bridge.getLocalServerStatus().catch(() => null);
-    setLocalServerStatus(status);
-  };
-
-  const refreshNgrokStatus = async () => {
-    const status = await window.bridge.getNgrokStatus().catch(() => null);
-    setNgrokStatus(status);
-  };
-
-  const onStartLocalServer = async () => {
-    setLocalServerBusy(true);
-    const status = await window.bridge.startLocalServer(serverAddressInput.trim() || undefined).catch(() => null);
-    setLocalServerBusy(false);
-    if (!status) {
-      setToast("Не удалось запустить локальный сервер");
-      return;
-    }
-    setLocalServerStatus(status);
-    if (!status.running) {
-      setToast(status.message || "Локальный сервер не запущен");
-      return;
-    }
-    setServerAddressInput(status.url);
-    setNetworkSettings((prev) => ({ ...prev, signalingUrl: status.url }));
-    networkUrlRef.current = status.url;
-    await connectServer(status.url);
-    setToast("Локальный сервер запущен и подключен");
-  };
-
-  const onStopLocalServer = async () => {
-    setLocalServerBusy(true);
-    const status = await window.bridge.stopLocalServer().catch(() => null);
-    setLocalServerBusy(false);
-    if (!status) {
-      setToast("Не удалось остановить локальный сервер");
-      return;
-    }
-    setLocalServerStatus(status);
-    setToast("Локальный сервер остановлен");
-  };
-
-  const onStartNgrok = async () => {
-    setNgrokBusy(true);
-    const status = await window.bridge.startNgrok(serverAddressInput.trim() || undefined).catch(() => null);
-    setNgrokBusy(false);
-    if (!status) {
-      setToast("Не удалось запустить ngrok");
-      return;
-    }
-    setNgrokStatus(status);
-    if (!status.running || !status.publicUrl) {
-      setToast(status.message || "Ngrok не запущен");
-      return;
-    }
-    setServerAddressInput(status.publicUrl);
-    await connectServer(status.publicUrl);
-    setToast("Ngrok запущен и подключен");
-  };
-
-  const onStopNgrok = async () => {
-    setNgrokBusy(true);
-    const status = await window.bridge.stopNgrok().catch(() => null);
-    setNgrokBusy(false);
-    if (!status) {
-      setToast("Не удалось остановить ngrok");
-      return;
-    }
-    setNgrokStatus(status);
-    setToast("Ngrok остановлен");
   };
 
   const onNetworkModeChange = async (mode: NetworkSettings["netplayMode"]) => {
@@ -2561,11 +2762,6 @@ export default function App() {
     setVideoSettings(next);
   };
 
-  const saveReplay = async (patch: Partial<ReplaySettings>) => {
-    const next = await window.bridge.saveReplaySettings(patch);
-    setReplaySettings(next);
-  };
-
   const saveProfileName = async () => {
     if (!profile) {
       return;
@@ -2670,29 +2866,34 @@ export default function App() {
     setToast("Avatar removed");
   };
 
-  const resetReplay = async () => {
-    const next = await window.bridge.saveReplaySettings({
-      enabled: true,
-      hotkey: "F8",
-      prebufferSeconds: 10,
-      quality: "720p",
-      fps: 30,
-      format: "webm",
-      saveFolder: ""
-    });
-    setReplaySettings(next);
-    setToast("Настройки повтора сброшены");
-  };
   const toggleAudioEnabled = () => {
     void saveAudio({ enabled: !audioSettings.enabled });
+  };
+  const markSessionVisualReady = () => {
+    setSessionVisualReady(true);
   };
   const togglePause = () => {
     const next = !manualPause;
     setManualPause(next);
-    const room = activeSession?.netplay?.roomId;
-    if (room && socialRef.current) {
-      socialRef.current.sendRoomPause(room, next);
+  };
+  const toggleRoomPause = () => {
+    const session = activeSession;
+    if (!session?.netplay) {
+      return;
     }
+    if (session.netplay.localUserId !== session.netplay.hostUserId) {
+      return;
+    }
+    const next = !remotePause;
+    setRemotePause(next);
+    session.netplay.social.sendRoomPause(session.netplay.roomId, next);
+  };
+  const onExitActiveSession = () => {
+    const session = activeSession;
+    if (session?.netplay && session.netplay.localUserId === session.netplay.hostUserId) {
+      void session.netplay.social.request("session:stop", { roomId: session.netplay.roomId }).catch(() => undefined);
+    }
+    setActiveSession(null);
   };
   const closeSettings = () => {
     setSettingsOpen(false);
@@ -2705,58 +2906,50 @@ export default function App() {
   };
 
   const settingsModal = (
-    <SettingsModal
-      open={settingsOpen}
-      category={settingsCategory}
-      onCategoryChange={setSettingsCategory}
-      onClose={closeSettings}
-      profile={profile}
-      profileNameInput={profileNameInput}
-      onProfileNameInputChange={setProfileNameInput}
-      onSaveProfileName={() => { void saveProfileName(); }}
-      onPickAvatar={onPickAvatar}
-      onRemoveAvatar={() => { void onRemoveAvatar(); }}
-      controls={controls}
-      waitingAction={waitingAction}
-      onStartRebind={setWaitingAction}
-      onResetControls={() => void onResetControls()}
-      uiSettings={uiSettings}
-      onSaveUiSettings={(patch) => { void saveUiPatch(patch); }}
-      raApiKeyInput={raApiKeyInput}
-      onRaApiKeyInputChange={setRaApiKeyInput}
-      onSaveRaApiKey={() => { void onSaveRaApiKey(); }}
-      onClearRaApiKey={() => { void onClearRaApiKey(); }}
-      raApiKeyBusy={raApiKeyBusy}
-      raApiKeyStatus={raApiKeyStatus}
-      audioSettings={audioSettings}
-      onSaveAudio={(patch) => { void saveAudio(patch); }}
-      videoSettings={videoSettings}
-      onSaveVideo={(patch) => { void saveVideo(patch); }}
-      replaySettings={replaySettings}
-      onSaveReplay={(patch) => { void saveReplay(patch); }}
-      onResetReplay={() => { void resetReplay(); }}
-      onOpenReplaysFolder={() => { void window.bridge.replays.openFolder(); }}
-      networkSettings={networkSettings}
-      networkInput={serverAddressInput}
-      onNetworkInputChange={setServerAddressInput}
-      onNetworkModeChange={(mode) => { void onNetworkModeChange(mode); }}
-      onConnectServer={() => void connectServer()}
-      networkBusy={networkBusy}
-      localServerStatus={localServerStatus}
-      localServerBusy={localServerBusy}
-      onStartLocalServer={() => { void onStartLocalServer(); }}
-      onStopLocalServer={() => { void onStopLocalServer(); }}
-      ngrokStatus={ngrokStatus}
-      ngrokBusy={ngrokBusy}
-      onStartNgrok={() => { void onStartNgrok(); }}
-      onStopNgrok={() => { void onStopNgrok(); }}
-    />
+    <Suspense fallback={null}>
+      <SettingsModal
+        open={settingsOpen}
+        category={settingsCategory}
+        onCategoryChange={setSettingsCategory}
+        onClose={closeSettings}
+        profile={profile}
+        profileNameInput={profileNameInput}
+        onProfileNameInputChange={setProfileNameInput}
+        onSaveProfileName={() => { void saveProfileName(); }}
+        onPickAvatar={onPickAvatar}
+        onRemoveAvatar={() => { void onRemoveAvatar(); }}
+        controls={controls}
+        waitingAction={waitingAction}
+        onStartRebind={setWaitingAction}
+        onResetControls={() => void onResetControls()}
+        uiSettings={uiSettings}
+        onSaveUiSettings={(patch) => { void saveUiPatch(patch); }}
+        raApiKeyInput={raApiKeyInput}
+        onRaApiKeyInputChange={setRaApiKeyInput}
+        onSaveRaApiKey={() => { void onSaveRaApiKey(); }}
+        onClearRaApiKey={() => { void onClearRaApiKey(); }}
+        raApiKeyBusy={raApiKeyBusy}
+        raApiKeyStatus={raApiKeyStatus}
+        audioSettings={audioSettings}
+        onSaveAudio={(patch) => { void saveAudio(patch); }}
+        networkSettings={networkSettings}
+        networkInput={serverAddressInput}
+        onNetworkInputChange={setServerAddressInput}
+        onNetworkModeChange={(mode) => { void onNetworkModeChange(mode); }}
+        onConnectServer={() => void connectServer()}
+        networkBusy={networkBusy}
+      />
+    </Suspense>
   );
 
   if (activeSession) {
     const showInGameChat = false;
     const inGameChatSide: "left" | "right" = activeSession.netplay?.isSpectator ? "right" : "left";
     const sessionLocalUserId = activeSession.netplay?.localUserId;
+    const canToggleRoomPause = Boolean(
+      activeSession.netplay &&
+      activeSession.netplay.localUserId === activeSession.netplay.hostUserId
+    );
     const isStreamGuest = Boolean(
       activeSession.netplay &&
       activeSession.netplay.transport === "stream" &&
@@ -2775,8 +2968,12 @@ export default function App() {
             audioEnabled={audioSettings.enabled}
             onToggleAudio={toggleAudioEnabled}
             onTogglePause={togglePause}
+            showRoomPauseAction={canToggleRoomPause}
+            roomPauseLabel={roomPauseLabel}
+            onToggleRoomPause={toggleRoomPause}
+            onVisualReady={markSessionVisualReady}
             onOpenSettings={openAudioSettings}
-            onExit={() => setActiveSession(null)}
+            onExit={onExitActiveSession}
             onToast={setToast}
             showInGameChat={showInGameChat}
             inGameChatSide={inGameChatSide}
@@ -2790,30 +2987,36 @@ export default function App() {
         </>
       );
     }
-    if (activeSession.game.emulatorId === "snes") {
+    if (activeSession.game.emulatorId !== "nes") {
       return (
         <>
-          <SnesGameView
-            game={activeSession.game}
-            romBase64={activeSession.romBase64}
-            audioSettings={audioSettings}
-            netplay={activeSession.netplay}
-            paused={isGamePaused}
-            pauseButtonLabel={pauseButtonLabel}
-            pauseInfo={pauseInfo}
-            onToggleAudio={toggleAudioEnabled}
-            onTogglePause={togglePause}
-            onOpenSettings={openAudioSettings}
-            onExit={() => setActiveSession(null)}
-            onToast={setToast}
-            showInGameChat={showInGameChat}
-            inGameChatSide={inGameChatSide}
-            roomChatMessages={roomChatMessages}
-            roomChatInput={roomChatInput}
-            onRoomChatInput={setRoomChatInput}
-            onSendRoomChat={() => { void onSendRoomChat(); }}
-            localUserId={sessionLocalUserId}
-          />
+          <Suspense fallback={null}>
+            <SnesGameView
+              game={activeSession.game}
+              romBase64={activeSession.romBase64}
+              audioSettings={audioSettings}
+              netplay={activeSession.netplay}
+              paused={isGamePaused}
+              pauseButtonLabel={pauseButtonLabel}
+              pauseInfo={pauseInfo}
+              onToggleAudio={toggleAudioEnabled}
+              onTogglePause={togglePause}
+              showRoomPauseAction={canToggleRoomPause}
+              roomPauseLabel={roomPauseLabel}
+              onToggleRoomPause={toggleRoomPause}
+              onVisualReady={markSessionVisualReady}
+              onOpenSettings={openAudioSettings}
+              onExit={onExitActiveSession}
+              onToast={setToast}
+              showInGameChat={showInGameChat}
+              inGameChatSide={inGameChatSide}
+              roomChatMessages={roomChatMessages}
+              roomChatInput={roomChatInput}
+              onRoomChatInput={setRoomChatInput}
+              onSendRoomChat={() => { void onSendRoomChat(); }}
+              localUserId={sessionLocalUserId}
+            />
+          </Suspense>
           {settingsModal}
         </>
       );
@@ -2825,16 +3028,21 @@ export default function App() {
           romBase64={activeSession.romBase64}
           controls={controls}
           videoSettings={videoSettings}
-          replaySettings={replaySettings}
           netplay={activeSession.netplay}
           paused={isGamePaused}
           pauseButtonLabel={pauseButtonLabel}
           pauseInfo={pauseInfo}
           audioEnabled={audioSettings.enabled}
+          audioVolume={audioSettings.volume}
+          audioLatency={audioSettings.latency}
           onToggleAudio={toggleAudioEnabled}
           onTogglePause={togglePause}
+          showRoomPauseAction={canToggleRoomPause}
+          roomPauseLabel={roomPauseLabel}
+          onToggleRoomPause={toggleRoomPause}
+          onVisualReady={markSessionVisualReady}
           onOpenSettings={openAudioSettings}
-          onExit={() => setActiveSession(null)}
+          onExit={onExitActiveSession}
           onToast={setToast}
           showInGameChat={showInGameChat}
           inGameChatSide={inGameChatSide}
@@ -2850,7 +3058,8 @@ export default function App() {
   }
 
   return (
-    <div className="app-shell steam-layout">
+    <div className="app-scale" style={appScaleStyle}>
+      <div className="app-shell steam-layout">
       <aside className="steam-sidebar">
         <Card className="profile-panel">
           <button
@@ -2874,17 +3083,18 @@ export default function App() {
             <div className="status-row">
               <span className="status-dot" />
               <span>Online</span>
-              <span className="profile-code-inline">
-                <code>{profile?.friendCode || "-"}</code>
-              </span>
-              <Button
-                variant="ghost"
-                data-variant="soft"
-                className="profile-copy-mini"
-                onClick={() => { if (profile?.friendCode) void navigator.clipboard.writeText(profile.friendCode); }}
+              <button
+                type="button"
+                className="profile-code-inline profile-code-inline-btn"
+                title="Copy friend code"
+                onClick={() => {
+                  if (!profile?.friendCode) return;
+                  void navigator.clipboard.writeText(profile.friendCode);
+                  setToast("Friend code copied");
+                }}
               >
-                {t("app.copy")}
-              </Button>
+                <code>{profile?.friendCode || "-"}</code>
+              </button>
             </div>
           </div>
         </Card>
@@ -2904,10 +3114,12 @@ export default function App() {
       </aside>
 
       <main className="steam-main">
-        <Card className="topbar">
-          <span className="app-title topbar-title">NES Emulator 1.01</span>
-          <Button variant="secondary" data-action="settings-open" className="with-bow" onClick={() => { setSettingsCategory("general"); setSettingsOpen(true); }}>{t("app.settings")}</Button>
-        </Card>
+        <AppTopbar
+          roomStatus={roomStatus}
+          networkHealth={networkHealth}
+          connectionState={connectionState}
+          onOpenSettings={() => { setSettingsCategory("account"); setSettingsOpen(true); }}
+        />
 
         {!selectedGame && <Card className="empty-state">{t("app.selectGameInLibrary")}</Card>}
 
@@ -2933,36 +3145,53 @@ export default function App() {
                   }}
                 >
                   {selectedGameCover ? <img src={selectedGameCover} alt={selectedGame.name} className="cover-image" /> : <div className="cover-placeholder"><span>{selectedGame.name}</span></div>}
+                  <img src={heroSideGif} alt="" className="cover-corner-gif" aria-hidden />
                   <div className="cover-edit-hint">{t("app.addCover")}</div>
                 </div>
               </div>
               <div className="hero-meta">
-                <h1 className="game-title">{selectedGame.name}</h1>
-                <Badge>{selectedEmulator?.short || selectedGame.platform}</Badge>
-                <div className="ra-id-row">
-                  <Input
-                    value={raGameIdInput}
-                    onChange={(event) => setRaGameIdInput(event.target.value)}
-                    placeholder="RetroAchievements Game ID"
-                  />
-                  <Button variant="secondary" data-variant="soft" onClick={() => { void onSaveRetroGameId(); }}>
-                    Сохранить RA ID
-                  </Button>
+                <div className="game-title-row">
+                  <h1 className="game-title">{selectedGame.name}</h1>
+                  <Badge>{selectedEmulator?.short || selectedGame.platform}</Badge>
                 </div>
                 {playDisabledReason && <p className="network-line">{playDisabledReason}</p>}
-                <div className="stats-grid">
-                  <Card className="stat-card"><span>{t("app.lastPlayed")}</span><strong>{formatLastPlayed(selectedGame.lastPlayedAt)}</strong></Card>
-                  <Card className="stat-card"><span>{t("app.totalPlayTime")}</span><strong>{formatPlayTime(selectedGame.totalPlayTime)}</strong></Card>
-                </div>
+                <GameMetaStats
+                  lastPlayedLabel={t("app.lastPlayed")}
+                  totalPlayTimeLabel={t("app.totalPlayTime")}
+                  lastPlayedValue={formatLastPlayed(selectedGame.lastPlayedAt)}
+                  totalPlayTimeValue={formatPlayTime(selectedGame.totalPlayTime)}
+                />
                 <Card className="game-achievements-preview">
                   <div className="game-achievement-head">
-                    <button type="button" className="achievements-open-link" onClick={() => setAchievementsModalOpen(true)}>
-                      Достижения
-                    </button>
+                    <div className="achievement-head-actions">
+                      <button type="button" className="achievements-open-link" onClick={() => setAchievementsModalOpen(true)}>
+                        Достижения
+                      </button>
+                      <button
+                        type="button"
+                        className={`ra-id-icon-btn ${raIdEditorOpen ? "active" : ""}`}
+                        title="Изменить RA Game ID"
+                        onClick={() => setRaIdEditorOpen((prev) => !prev)}
+                      >
+                        <img src={achievementsIcon} alt="RA ID" />
+                      </button>
+                    </div>
                     <span>{raData ? `${raData.unlockedAchievements}/${raData.totalAchievements}` : "—"}</span>
                   </div>
+                  {raIdEditorOpen && (
+                    <div className="ra-id-inline-editor">
+                      <Input
+                        value={raGameIdInput}
+                        onChange={(event) => setRaGameIdInput(event.target.value)}
+                        placeholder="RetroAchievements Game ID"
+                      />
+                      <Button variant="secondary" data-variant="soft" onClick={() => { void onSaveRetroGameId(); }}>
+                        Сохранить
+                      </Button>
+                    </div>
+                  )}
                   {!selectedGame.retroAchievementsGameId && (
-                    <p className="game-achievement-desc">Укажи RA Game ID, чтобы подтянуть достижения.</p>
+                    <p className="game-achievement-desc">Укажи RA Game ID, чтобы видеть достижения.</p>
                   )}
                   {selectedGame.retroAchievementsGameId && raLoading && (
                     <p className="game-achievement-desc">Загрузка достижений...</p>
@@ -2970,7 +3199,7 @@ export default function App() {
                   {selectedGame.retroAchievementsGameId && !raLoading && raError && (
                     <div className="game-achievement-actions">
                       <p className="game-achievement-desc">{raError}</p>
-                      <Button variant="secondary" data-variant="soft" onClick={() => setRaReloadKey((prev) => prev + 1)}>Повторить</Button>
+                      <Button variant="secondary" data-variant="soft" onClick={() => setRaReloadKey((prev) => prev + 1)}>Обновить</Button>
                     </div>
                   )}
                   {selectedGame.retroAchievementsGameId && !raLoading && !raError && raData && raPreviewAchievements.length > 0 && (
@@ -3012,9 +3241,9 @@ export default function App() {
                   data-variant="soft"
                   className="section-expand-btn"
                   onClick={() => setSectionMenuOpen(true)}
-                  title="Открыть как полноценное меню"
+                  title="Открыть на весь экран"
                 >
-                  ↕
+                  ?
                 </Button>
               </div>
               {mainBottomTab === "network" && (
@@ -3064,7 +3293,7 @@ export default function App() {
                         </div>
                         <div className="friend-actions">
                           <Button variant="ghost" disabled={!f.online || !roomId} onClick={() => void onInvite(f.userId)}>{t("app.invite")}</Button>
-                          <Button variant="ghost" disabled={!f.inGame || !f.roomId} onClick={() => void onWatchFriend(f)}>Смотреть</Button>
+                          <Button variant="ghost" disabled={!f.inGame || !f.roomId || Boolean(roomId && roomId !== f.roomId)} onClick={() => void onWatchFriend(f)}>Смотреть</Button>
                         </div>
                       </div>
                     ))}
@@ -3099,20 +3328,20 @@ export default function App() {
                     data-variant={raSort === "lockedFirst" ? undefined : "soft"}
                     onClick={() => setRaSort("lockedFirst")}
                   >
-                    Сначала не полученные
+                    Сначала неоткрытые
                   </Button>
                   <Button
                     variant={raSort === "unlockedFirst" ? "primary" : "secondary"}
                     data-variant={raSort === "unlockedFirst" ? undefined : "soft"}
                     onClick={() => setRaSort("unlockedFirst")}
                   >
-                    Сначала полученные
+                    Сначала открытые
                   </Button>
                 </div>
                 {!selectedGame?.retroAchievementsGameId && (
                   <Card className="game-achievement-item">
                     <strong>Для этой игры нет RetroAchievements ID</strong>
-                    <p className="game-achievement-desc">Укажи RA Game ID на главной карточке игры.</p>
+                    <p className="game-achievement-desc">Укажи RA Game ID на карточке выбранной игры.</p>
                   </Card>
                 )}
                 {selectedGame?.retroAchievementsGameId && raLoading && (
@@ -3124,7 +3353,7 @@ export default function App() {
                   <Card className="game-achievement-item">
                     <strong>Ошибка загрузки достижений</strong>
                     <p className="game-achievement-desc">{raError}</p>
-                    <Button variant="secondary" onClick={() => setRaReloadKey((prev) => prev + 1)}>Повторить</Button>
+                    <Button variant="secondary" onClick={() => setRaReloadKey((prev) => prev + 1)}>Обновить</Button>
                   </Card>
                 )}
                 {selectedGame?.retroAchievementsGameId && !raLoading && !raError && sortedRaAchievements.map((item) => (
@@ -3138,7 +3367,7 @@ export default function App() {
                       <div className="game-achievement-body">
                         <p className="game-achievement-desc">{item.description}</p>
                         <span className="game-achievement-desc">
-                          {item.isUnlocked ? `Получено${item.unlockedAt ? `: ${new Date(item.unlockedAt).toLocaleString()}` : ""}` : "Не получено"}
+                          {item.isUnlocked ? `Открыто${item.unlockedAt ? `: ${new Date(item.unlockedAt).toLocaleString()}` : ""}` : "Не открыто"}
                         </span>
                       </div>
                     </div>
@@ -3206,7 +3435,7 @@ export default function App() {
                           </div>
                           <div className="friend-actions">
                             <Button variant="ghost" disabled={!f.online || !roomId} onClick={() => void onInvite(f.userId)}>{t("app.invite")}</Button>
-                            <Button variant="ghost" disabled={!f.inGame || !f.roomId} onClick={() => void onWatchFriend(f)}>Смотреть</Button>
+                            <Button variant="ghost" disabled={!f.inGame || !f.roomId || Boolean(roomId && roomId !== f.roomId)} onClick={() => void onWatchFriend(f)}>Смотреть</Button>
                           </div>
                         </div>
                       ))}
@@ -3384,7 +3613,7 @@ export default function App() {
       {xpModalOpen && (
         <div className="cover-editor-overlay" onClick={() => setXpModalOpen(false)}>
           <Card className="cover-editor-modal xp-modal" onClick={(event) => event.stopPropagation()}>
-            <h3>Профиль и опыт</h3>
+            <h3>Прогресс и опыт</h3>
             <div className="xp-summary">
               <div className="xp-summary-main">
                 <strong>Lv.{profileLevel.level}</strong>
@@ -3397,7 +3626,7 @@ export default function App() {
             </div>
             <div className="xp-sections">
               <div className="xp-section">
-                <h4>Что дает опыт</h4>
+                <h4>За что дан опыт</h4>
                 <div className="achievements-list">
                   {xpBreakdown.map((entry) => (
                     <div key={entry.id} className="achievement-item unlocked">
@@ -3437,9 +3666,19 @@ export default function App() {
       )}
 
       {toast && <Card className="toast">{toast}</Card>}
+      </div>
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
 
 
 

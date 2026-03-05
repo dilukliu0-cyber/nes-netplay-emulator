@@ -33,7 +33,7 @@ export function NetplayHeader({
   onCloseRoom,
   onChangeMode
 }: NetplayHeaderProps) {
-  const currentModeLabel = mode === "stream" ? "Потоковый" : "P2P (Input Sync)";
+  const currentModeLabel = mode === "stream" ? "Стрим" : "Управление";
   const healthLabel = health === "good" ? "Online" : health === "degraded" ? "Degraded" : "Offline";
 
   return (
@@ -85,10 +85,10 @@ export function NetplayHeader({
           <div className="overflow-menu-text">Mode: {currentModeLabel}</div>
           <div className="overflow-menu-actions">
             <Button variant="ghost" onClick={() => onChangeMode("lockstep")} disabled={mode === "lockstep"}>
-              P2P
+              Управление
             </Button>
             <Button variant="ghost" onClick={() => onChangeMode("stream")} disabled={mode === "stream"}>
-              Поток
+              Стрим
             </Button>
           </div>
         </div>
