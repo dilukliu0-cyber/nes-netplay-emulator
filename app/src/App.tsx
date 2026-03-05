@@ -1939,14 +1939,7 @@ export default function App() {
       if (sessionVisualReady) {
         return;
       }
-      const session = activeSession;
-      if (session?.netplay && session.netplay.localUserId === session.netplay.hostUserId) {
-        void session.netplay.social.request("session:stop", { roomId: session.netplay.roomId }).catch(() => undefined);
-      }
-      setActiveSession(null);
-      setManualPause(false);
-      setRemotePause(false);
-      setToast("Черный экран: не получен первый кадр. Перезапусти игру.");
+      setToast("Черный экран: первый кадр не получен. Проверь подключение и попробуй переподключиться.");
     }, 12000);
     return () => window.clearTimeout(timeoutId);
   }, [activeSession, sessionVisualReady]);
