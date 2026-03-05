@@ -232,18 +232,7 @@ const defaultUiSettings: UiSettings = {
   inviteSoundEnabled: true
 };
 
-function formatDisplayVersion(version: string): string {
-  const [majorRaw, , patchRaw] = version.split(".");
-  const major = Number(majorRaw) || 1;
-  const patch = Number(patchRaw) || 0;
-  if (patch <= 0) {
-    return String(major);
-  }
-  return `${major}.${String(patch).padStart(2, "0")}`;
-}
-
-const appDisplayVersion = formatDisplayVersion(app.getVersion());
-const appDisplayName = `NES Emulator ${appDisplayVersion}`;
+const appDisplayName = "NES Netplay 3";
 
 function userDataPath(...parts: string[]): string {
   return path.join(app.getPath("userData"), ...parts);
