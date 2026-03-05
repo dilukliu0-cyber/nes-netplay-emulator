@@ -187,6 +187,7 @@ const INPUT_BIT_B = 1 << 5;
 const INPUT_BIT_START = 1 << 6;
 const INPUT_BIT_SELECT = 1 << 7;
 const LOCKSTEP_INPUT_DELAY_FRAMES = 2;
+const LOCKSTEP_KEYFRAME_INTERVAL_FRAMES = 15;
 const COVER_OUTPUT_WIDTH = 640;
 const COVER_OUTPUT_HEIGHT = 360;
 const AVATAR_OUTPUT_SIZE = 512;
@@ -493,6 +494,8 @@ function GameView(props: {
     const localStateByFrame = new Map<number, number>();
     const remoteStateByFrame = new Map<number, number>();
     let remoteStreamInputState = 0;
+    let lastSentLocalState = 0;
+    let lastSentLocalFrame = -1;
 
     const applyMaskToPlayer = (player: number, previousMask: number, nextMask: number): number => {
       for (const item of bitToButton) {
@@ -613,17 +616,19 @@ function GameView(props: {
       if (isLockstepNetplay) {
         while (plannedLocalFrame <= currentFrame + LOCKSTEP_INPUT_DELAY_FRAMES) {
           localStateByFrame.set(plannedLocalFrame, localInputState);
-          netplay!.social.sendNetplayInput(netplay!.roomId, plannedLocalFrame, localInputState);
+          const forceKeyframe = plannedLocalFrame - lastSentLocalFrame >= LOCKSTEP_KEYFRAME_INTERVAL_FRAMES;
+          if (localInputState !== lastSentLocalState || forceKeyframe) {
+            netplay!.social.sendNetplayInput(netplay!.roomId, plannedLocalFrame, localInputState);
+            lastSentLocalState = localInputState;
+            lastSentLocalFrame = plannedLocalFrame;
+          }
           plannedLocalFrame += 1;
         }
 
         let steps = 0;
         while (frameAccumulatorMs >= frameDurationMs && steps < 2) {
           frameAccumulatorMs -= frameDurationMs;
-          const localFrameState = localStateByFrame.get(currentFrame);
-          if (localFrameState === undefined) {
-            break;
-          }
+          const localFrameState = localStateByFrame.get(currentFrame) ?? previousLocalAppliedState;
           const remoteFrameState = remoteStateByFrame.get(currentFrame) ?? lastRemoteKnownState;
 
           previousLocalAppliedState = applyMaskToPlayer(localPlayer, previousLocalAppliedState, localFrameState);
