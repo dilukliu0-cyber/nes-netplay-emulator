@@ -4,7 +4,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { rcedit } from "rcedit";
 
 const distDir = path.resolve(process.cwd(), "dist");
-const unpackedExe = path.join(distDir, "win-unpacked", "nes netplay online.exe");
+const unpackedExe = path.join(distDir, "win-unpacked", "nes netplay online 4.1.exe");
 const iconPath = path.resolve(process.cwd(), "build", "icon.ico");
 const maxAttempts = 6;
 
@@ -112,10 +112,10 @@ for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
   if (fs.existsSync(iconPath)) {
     await rcedit(unpackedExe, {
       icon: iconPath,
-      "file-version": "2.0.0",
-      "product-version": "2.0.0",
+      "file-version": "4.1.0",
+      "product-version": "4.1.0",
       "version-string": {
-        ProductName: "nes netplay online",
+        ProductName: "nes netplay online 4.1",
         FileDescription: "NES emulator with online netplay support"
       }
     });
@@ -146,4 +146,5 @@ for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
   cleanupNsisArtifacts();
   sleep(4000);
 }
+
 

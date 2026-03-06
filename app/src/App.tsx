@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
+ï»¿import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import { Controller, NES } from "jsnes";
 import { SocialClient } from "./core/socialClient";
@@ -768,9 +768,9 @@ function GameView(props: {
       onExit();
       return () => undefined;
     }
-      onToast("???? ????????????");
+      onToast("Text");
     } catch {
-      onToast("?? ??????? ????????????? ????");
+      onToast("Text");
     }
   }
 
@@ -912,7 +912,7 @@ function GameView(props: {
             <h3>{t("app.gameMenuTitle")}</h3>
             <div className="in-game-menu-actions">
               <Button variant="secondary" onClick={() => setMenuOpen(false)}>{t("app.gameMenuContinue")}</Button>
-              <Button variant="secondary" onClick={() => restartGame()}>?????? ??????</Button>
+              <Button variant="secondary" onClick={() => restartGame()}>Text Text</Button>
               <Button variant="secondary" onClick={() => { onToggleAudio(); }}>{audioEnabled ? t("app.gameMenuSoundOn") : t("app.gameMenuSoundOff")}</Button>
               {showRoomPauseAction && <Button variant="secondary" onClick={() => onToggleRoomPause()}>{roomPauseLabel}</Button>}
               <Button variant="secondary" onClick={() => { setMenuOpen(false); onOpenSettings(); }}>{t("app.gameMenuSettings")}</Button>
@@ -925,14 +925,14 @@ function GameView(props: {
                   {slotPreviewById[slot]?.screenshot ? (
                     <img src={slotPreviewById[slot].screenshot} alt={`Slot ${slot}`} className="save-slot-preview" />
                   ) : (
-                    <div className="save-slot-preview empty">?????</div>
+                    <div className="save-slot-preview empty">Text</div>
                   )}
                   <div className="save-slot-meta">
-                    {slotPreviewById[slot]?.savedAt ? new Date(slotPreviewById[slot].savedAt as string).toLocaleString() : "??? ??????????"}
+                    {slotPreviewById[slot]?.savedAt ? new Date(slotPreviewById[slot].savedAt as string).toLocaleString() : "Text"}
                   </div>
                   <div className="save-slot-actions">
-                    <Button variant="secondary" onClick={() => saveState(slot)}>?????????</Button>
-                    <Button variant="secondary" onClick={() => loadState(slot)}>?????????</Button>
+                    <Button variant="secondary" onClick={() => saveState(slot)}>Text</Button>
+                    <Button variant="secondary" onClick={() => loadState(slot)}>Text</Button>
                   </div>
                 </Card>
               ))}
@@ -1059,11 +1059,11 @@ export default function App() {
   }, [profileXp]);
   const achievements = useMemo(() => {
     const wins = [
-      { id: "first_game", title: "?????? ????????", desc: "?????? ?????? ????", unlocked: games.length >= 1 },
-      { id: "collector", title: "????????????", desc: "?????? 10 ???", unlocked: games.length >= 10 },
-      { id: "one_hour", title: "????????", desc: "?????? 1 ???", unlocked: totalPlaySeconds >= 3600 },
-      { id: "marathon", title: "?????-???????", desc: "?????? 10 ?????", unlocked: totalPlaySeconds >= 36000 },
-      { id: "social", title: "? ????? ??????", desc: "?????? 3 ??????", unlocked: friends.length >= 3 }
+      { id: "first_game", title: "Text", desc: "Text", unlocked: games.length >= 1 },
+      { id: "collector", title: "Text", desc: "Text", unlocked: games.length >= 10 },
+      { id: "one_hour", title: "Text", desc: "Text", unlocked: totalPlaySeconds >= 3600 },
+      { id: "marathon", title: "Text", desc: "Text", unlocked: totalPlaySeconds >= 36000 },
+      { id: "social", title: "Text", desc: "Text", unlocked: friends.length >= 3 }
     ];
     return wins;
   }, [friends.length, games.length, totalPlaySeconds]);
@@ -1071,15 +1071,15 @@ export default function App() {
   const xpBreakdown = useMemo(() => {
     const playMinutes = Math.floor(totalPlaySeconds / 60);
     return [
-      { id: "playtime", label: "?? ????? ? ????", value: playMinutes },
-      { id: "library", label: "?? ???? ? ??????????", value: games.length * 30 },
-      { id: "friends", label: "?? ??????", value: friends.length * 10 }
+      { id: "playtime", label: "Text", value: playMinutes },
+      { id: "library", label: "Text", value: games.length * 30 },
+      { id: "friends", label: "Text", value: friends.length * 10 }
     ];
   }, [friends.length, games.length, totalPlaySeconds]);
   const selectedRomExt = useMemo(() => (selectedGame ? getRomExt(selectedGame.path) : ""), [selectedGame]);
   const isGamePaused = settingsOpen || manualPause || remotePause;
   const pauseButtonLabel = manualPause ? t("app.gameMenuResume") : t("app.gameMenuPause");
-  const roomPauseLabel = remotePause ? "????? ????? ??? ????" : "????? ??? ????";
+  const roomPauseLabel = remotePause ? "Text" : "Text";
   const pauseInfo = useMemo(() => {
     const lines: string[] = [];
     if (settingsOpen) lines.push(t("app.gamePausedBySettings"));
@@ -1114,7 +1114,7 @@ export default function App() {
   const roomMemberIds = roomState?.members || [];
   const roomPlayerIds = roomState ? roomState.members.filter((id) => !roomState.spectators.includes(id)) : [];
   const networkQuality = useMemo(() => {
-    if (networkLatencyMs === null) return "—";
+    if (networkLatencyMs === null) return "â€”";
     if (networkLatencyMs <= 80) return "Excellent";
     if (networkLatencyMs <= 140) return "Good";
     if (networkLatencyMs <= 220) return "Fair";
@@ -1149,10 +1149,10 @@ export default function App() {
     return covers[selectedGame.id] || "";
   }, [covers, selectedGame, selectedGameRaCover]);
   const friendPresenceText = (friend: FriendItem): string => {
-    if (!friend.online) return "???????";
-    if (friend.inGame) return `?????? ? "${friend.gameName || "??????????? ????"}"`;
-    if (friend.roomId) return `? ??????? ${friend.roomId}`;
-    return "??????";
+    if (!friend.online) return "Text";
+    if (friend.inGame) return `Text`;
+    if (friend.roomId) return `Text`;
+    return "Text";
   };
 
   const displayNameByUserId = useMemo(() => {
@@ -1252,7 +1252,7 @@ export default function App() {
         return;
       }
       if (!nextRoom.session.romBase64) {
-        setToast("?????????? ???????????? ??????: ROM ?? ??????? ????????");
+        setToast("Text");
         return;
       }
       setActiveSession({
@@ -1271,7 +1271,7 @@ export default function App() {
       });
       setManualPause(false);
       setRemotePause(false);
-      setToast("?????? ????????????? ????? ???????????????");
+      setToast("Text");
       return;
     }
     if (localProfile.userId === nextRoom.hostUserId) {
@@ -1303,7 +1303,7 @@ export default function App() {
     });
     setManualPause(false);
     setRemotePause(false);
-    setToast("?????? ????????????? ????? ???????????????");
+    setToast("Text");
   };
 
   const restoreRoomMembership = async (social: SocialClient) => {
@@ -1354,7 +1354,7 @@ export default function App() {
       if (state === "reconnecting") {
         setNetworkHealth("degraded");
         if (roomIdRef.current) {
-          setRoomStatus("??????????????? ? ???????...");
+          setRoomStatus("Text");
         }
         return;
       }
@@ -1432,7 +1432,7 @@ export default function App() {
           }
         };
       });
-      setToast("Netplay-?????? ????????");
+      setToast("Text");
     });
     social.onStreamStart((payload) => {
       if (!payload.roomId) {
@@ -1511,7 +1511,7 @@ export default function App() {
       setActiveSession((prev) => (prev?.netplay?.roomId === payload.roomId ? null : prev));
       setRemotePause(false);
       setManualPause(false);
-      setToast("???? ????? ?? ????");
+      setToast("Text");
     });
     social.onRoomChat((message) => {
       if (roomIdRef.current !== message.roomId) {
@@ -1629,7 +1629,7 @@ export default function App() {
       if (sessionVisualReady) {
         return;
       }
-      setToast("?????? ?????: ?????? ???? ?? ???????. ??????? ??????????? ? ???????? ????????????????.");
+      setToast("Text");
     }, 12000);
     return () => window.clearTimeout(timeoutId);
   }, [activeSession, sessionVisualReady]);
@@ -1899,7 +1899,7 @@ export default function App() {
       .catch((error: unknown) => {
         if (cancelled) return;
         setRaData(null);
-        setRaError(error instanceof Error ? error.message : "?? ??????? ????????? ??????????");
+        setRaError(error instanceof Error ? error.message : "Text");
       })
       .finally(() => {
         if (!cancelled) {
@@ -2059,7 +2059,7 @@ export default function App() {
       setControls(next);
       void window.bridge.saveControls({ [waitingAction]: event.code });
       setWaitingAction(null);
-      setToast(`??????? ${waitingAction.toUpperCase()} ?????????`);
+      setToast(`Text`);
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -2094,18 +2094,18 @@ export default function App() {
     const parsed = Number(trimmed);
     const nextRetroId = trimmed ? (Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : null) : null;
     if (trimmed && !nextRetroId) {
-      setToast("RetroAchievements ID ?????? ???? ????????????? ??????");
+      setToast("Text");
       return;
     }
     const updated = await window.bridge.updateGameRetroId(selectedGame.id, nextRetroId).catch(() => null);
     if (!updated) {
-      setToast("?? ??????? ????????? RetroAchievements ID");
+      setToast("Text");
       return;
     }
     applyGameUpdate(updated);
     setRaIdEditorOpen(false);
     setRaReloadKey((prev) => prev + 1);
-    setToast("RetroAchievements ID ????????");
+    setToast("Text");
   };
 
   const runRoomLaunchPreflight = async (
@@ -2114,29 +2114,29 @@ export default function App() {
     localProfile: Profile
   ): Promise<{ ok: true; room: RoomState } | { ok: false; reason: string }> => {
     if (!roomId) {
-      return { ok: false, reason: "??????? ?????? ??? ?????????? ? ???????" };
+      return { ok: false, reason: "Text" };
     }
     const connected = await social.connect().then(() => true).catch(() => false);
     if (!connected) {
-      return { ok: false, reason: "??? ??????????? ? ???????. ??????? ??????." };
+      return { ok: false, reason: "Text" };
     }
     const pingOk = await social.request("ping", { roomId }).then(() => true).catch(() => false);
     if (!pingOk) {
-      return { ok: false, reason: "?????? ??????? ?? ????????" };
+      return { ok: false, reason: "Text" };
     }
     const remoteRoom = await social.getRoomState(roomId).catch(() => null);
     if (!remoteRoom) {
-      return { ok: false, reason: "?? ??????? ???????? ????????? ???????" };
+      return { ok: false, reason: "Text" };
     }
     const inRoom = remoteRoom.members.includes(localProfile.userId) || remoteRoom.spectators.includes(localProfile.userId);
     if (!inRoom) {
-      return { ok: false, reason: "?? ?????? ?? ? ???? ???????. ?????????? ??????." };
+      return { ok: false, reason: "Text" };
     }
     if (remoteRoom.hostUserId !== localProfile.userId) {
       return { ok: false, reason: t("app.hostOnlyStart") };
     }
     if (remoteRoom.session && remoteRoom.session.gameId !== game.id) {
-      return { ok: false, reason: "? ??????? ??? ???????? ?????? ??????" };
+      return { ok: false, reason: "Text" };
     }
     return { ok: true, room: remoteRoom };
   };
@@ -2154,14 +2154,14 @@ export default function App() {
     }
     if (mode === "room") {
       if (!roomId || !socialRef.current || !profile) {
-        setToast("??????? ?????? ??? ?????????? ? ???????");
+        setToast("Text");
         return;
       }
       const social = socialRef.current;
       const preflight = await runRoomLaunchPreflight(selectedGame, social, profile);
       if (!preflight.ok) {
         setToast(preflight.reason);
-        if (preflight.reason.includes("???????")) {
+        if (preflight.reason.includes("Text")) {
           setNetworkHealth("offline");
         }
         return;
@@ -2186,7 +2186,7 @@ export default function App() {
         }
       });
       if (requestedStreamMode) {
-        setToast("Stream mode ???????? ????????: ????????? ?????????? lockstep.");
+        setToast("Text");
       }
       const started = await social.startNetplay(
         roomId,
@@ -2274,7 +2274,7 @@ export default function App() {
   const onInvite = async (friendUserId: string) => {
     if (!socialRef.current) return;
     if (!roomId || !roomState) {
-      setToast("??????? ?????? ???????");
+      setToast("Text");
       return;
     }
     const gameId = roomState.gameId || selectedGame?.id;
@@ -2287,11 +2287,11 @@ export default function App() {
 
   const onWatchFriend = async (friend: FriendItem) => {
     if (!friend.roomId) {
-      setToast("? ????? ??? ???????? ???????");
+      setToast("Text");
       return;
     }
     if (roomId && roomId !== friend.roomId) {
-      setToast("??????? ????? ?? ??????? ???????");
+      setToast("Text");
       return;
     }
     try {
@@ -2300,9 +2300,9 @@ export default function App() {
       setRoomIdInput(room.roomId);
       setRoomStatus(`${t("app.roomConnected")} (${room.roomId})`);
       setMode("room");
-      setToast(`????????? ??? ??????? ? ${friend.displayName}`);
+      setToast(`Text`);
     } catch {
-      setToast("?? ??????? ???????????? ? ?????????");
+      setToast("Text");
     }
   };
 
@@ -2332,10 +2332,10 @@ export default function App() {
         await social.refreshFriends().catch(() => undefined);
       }
 
-      setToast("?????????? ? ???????");
+      setToast("Text");
     } catch (error) {
       setNetworkHealth("offline");
-      setToast(error instanceof Error ? error.message : "?? ??????? ???????????? ? ???????");
+      setToast(error instanceof Error ? error.message : "Text");
     } finally {
       setNetworkBusy(false);
     }
@@ -2371,7 +2371,7 @@ export default function App() {
     }
     const updated = await window.bridge.covers.removeCover(selectedGame.id).catch(() => null);
     if (!updated) {
-      setToast("?? ??????? ??????? ???????");
+      setToast("Text");
       return;
     }
     applyGameUpdate(updated);
@@ -2380,7 +2380,7 @@ export default function App() {
       delete next[selectedGame.id];
       return next;
     });
-    setToast("????????? ??????? ???????");
+    setToast("Text");
   };
 
   const onCoverFileSelected = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -2763,7 +2763,7 @@ export default function App() {
             className="avatar-wrap avatar-trigger"
             type="button"
             onClick={() => setXpModalOpen(true)}
-            title="???????"
+            title="Text"
           >
             {profile?.avatarDataUrl ? (
               <img src={profile.avatarDataUrl} alt={profile.displayName || "Avatar"} className="avatar profile-avatar-image" />
@@ -2833,7 +2833,7 @@ export default function App() {
                     event.preventDefault();
                     void onRemoveCover();
                   }}
-                  title="???: ??????? ???????, ???: ??????? ????????? ???????"
+                  title="Text"
                   onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault();
@@ -2862,18 +2862,18 @@ export default function App() {
                   <div className="game-achievement-head">
                     <div className="achievement-head-actions">
                       <button type="button" className="achievements-open-link" onClick={() => setAchievementsModalOpen(true)}>
-                        ??????????
+                        Text
                       </button>
                       <button
                         type="button"
                         className={`ra-id-icon-btn ${raIdEditorOpen ? "active" : ""}`}
-                        title="???????? RA Game ID"
+                        title="Text"
                         onClick={() => setRaIdEditorOpen((prev) => !prev)}
                       >
                         <img src={achievementsIcon} alt="RA ID" />
                       </button>
                     </div>
-                    <span>{raData ? `${raData.unlockedAchievements}/${raData.totalAchievements}` : "—"}</span>
+                    <span>{raData ? `${raData.unlockedAchievements}/${raData.totalAchievements}` : "â€”"}</span>
                   </div>
                   {raIdEditorOpen && (
                     <div className="ra-id-inline-editor">
@@ -2883,20 +2883,20 @@ export default function App() {
                         placeholder="RetroAchievements Game ID"
                       />
                       <Button variant="secondary" data-variant="soft" onClick={() => { void onSaveRetroGameId(); }}>
-                        ?????????
+                        Text
                       </Button>
                     </div>
                   )}
                   {!selectedGame.retroAchievementsGameId && (
-                    <p className="game-achievement-desc">????? RA Game ID, ????? ?????? ??????????.</p>
+                    <p className="game-achievement-desc">Text RA Game ID, Text Text Text.</p>
                   )}
                   {selectedGame.retroAchievementsGameId && raLoading && (
-                    <p className="game-achievement-desc">???????? ??????????...</p>
+                    <p className="game-achievement-desc">Text Text...</p>
                   )}
                   {selectedGame.retroAchievementsGameId && !raLoading && raError && (
                     <div className="game-achievement-actions">
                       <p className="game-achievement-desc">{raError}</p>
-                      <Button variant="secondary" data-variant="soft" onClick={() => setRaReloadKey((prev) => prev + 1)}>????????</Button>
+                      <Button variant="secondary" data-variant="soft" onClick={() => setRaReloadKey((prev) => prev + 1)}>Text</Button>
                     </div>
                   )}
                   {selectedGame.retroAchievementsGameId && !raLoading && !raError && raData && raPreviewAchievements.length > 0 && (
@@ -2923,14 +2923,14 @@ export default function App() {
                     data-variant={mainBottomTab === "network" ? undefined : "soft"}
                     onClick={() => setMainBottomTab("network")}
                   >
-                    ????
+                    Text
                   </Button>
                   <Button
                     variant={mainBottomTab === "friends" ? "primary" : "secondary"}
                     data-variant={mainBottomTab === "friends" ? undefined : "soft"}
                     onClick={() => setMainBottomTab("friends")}
                   >
-                    ??????
+                    Text
                   </Button>
                 </div>
                 <Button
@@ -2938,7 +2938,7 @@ export default function App() {
                   data-variant="soft"
                   className="section-expand-btn"
                   onClick={() => setSectionMenuOpen(true)}
-                  title="??????? ?? ???? ?????"
+                  title="Text"
                 >
                   ?
                 </Button>
@@ -2950,7 +2950,7 @@ export default function App() {
                       isHost={Boolean(profile && roomState?.hostUserId === profile.userId)}
                       roomId={roomId}
                       roomStatus={roomStatus}
-                      hostName={roomState ? roomMemberName(roomState.hostUserId) : (profile?.displayName || "—")}
+                      hostName={roomState ? roomMemberName(roomState.hostUserId) : (profile?.displayName || "â€”")}
                       playersCount={roomPlayerIds.length}
                       spectatorsCount={roomState?.spectators.length || 0}
                       latencyMs={networkLatencyMs}
@@ -2990,7 +2990,7 @@ export default function App() {
                         </div>
                         <div className="friend-actions">
                           <Button variant="ghost" disabled={!f.online || !roomId} onClick={() => void onInvite(f.userId)}>{t("app.invite")}</Button>
-                          <Button variant="ghost" disabled={!f.inGame || !f.roomId || Boolean(roomId && roomId !== f.roomId)} onClick={() => void onWatchFriend(f)}>????????</Button>
+                          <Button variant="ghost" disabled={!f.inGame || !f.roomId || Boolean(roomId && roomId !== f.roomId)} onClick={() => void onWatchFriend(f)}>Text</Button>
                         </div>
                       </div>
                     ))}
@@ -3008,12 +3008,12 @@ export default function App() {
         <div className="achievements-modal-overlay" onClick={() => setAchievementsModalOpen(false)}>
           <Card className="achievements-modal" onClick={(event) => event.stopPropagation()}>
             <div className="achievements-modal-header">
-              <h2>??????????</h2>
-              <Button variant="secondary" data-variant="soft" onClick={() => setAchievementsModalOpen(false)}>???????</Button>
+              <h2>Text</h2>
+              <Button variant="secondary" data-variant="soft" onClick={() => setAchievementsModalOpen(false)}>Text</Button>
             </div>
             <div className="achievements-modal-summary">
-              <span>{selectedGame?.name || "????"}</span>
-              <span>{raData ? `${raData.unlockedAchievements}/${raData.totalAchievements}` : "—"}</span>
+              <span>{selectedGame?.name || "Text"}</span>
+              <span>{raData ? `${raData.unlockedAchievements}/${raData.totalAchievements}` : "â€”"}</span>
               <span>{raData ? `${raData.totalPoints} pts` : ""}</span>
             </div>
 
@@ -3025,32 +3025,32 @@ export default function App() {
                     data-variant={raSort === "lockedFirst" ? undefined : "soft"}
                     onClick={() => setRaSort("lockedFirst")}
                   >
-                    ??????? ??????????
+                    Text Text
                   </Button>
                   <Button
                     variant={raSort === "unlockedFirst" ? "primary" : "secondary"}
                     data-variant={raSort === "unlockedFirst" ? undefined : "soft"}
                     onClick={() => setRaSort("unlockedFirst")}
                   >
-                    ??????? ????????
+                    Text Text
                   </Button>
                 </div>
                 {!selectedGame?.retroAchievementsGameId && (
                   <Card className="game-achievement-item">
-                    <strong>??? ???? ???? ??? RetroAchievements ID</strong>
-                    <p className="game-achievement-desc">????? RA Game ID ?? ???????? ????????? ????.</p>
+                    <strong>This game has no RetroAchievements ID</strong>
+                    <p className="game-achievement-desc">Text RA Game ID ?? Text Text Text.</p>
                   </Card>
                 )}
                 {selectedGame?.retroAchievementsGameId && raLoading && (
                   <Card className="game-achievement-item">
-                    <strong>????????...</strong>
+                    <strong>Text...</strong>
                   </Card>
                 )}
                 {selectedGame?.retroAchievementsGameId && !raLoading && raError && (
                   <Card className="game-achievement-item">
-                    <strong>?????? ???????? ??????????</strong>
+                    <strong>Text Text Text</strong>
                     <p className="game-achievement-desc">{raError}</p>
-                    <Button variant="secondary" onClick={() => setRaReloadKey((prev) => prev + 1)}>????????</Button>
+                    <Button variant="secondary" onClick={() => setRaReloadKey((prev) => prev + 1)}>Text</Button>
                   </Card>
                 )}
                 {selectedGame?.retroAchievementsGameId && !raLoading && !raError && sortedRaAchievements.map((item) => (
@@ -3064,7 +3064,7 @@ export default function App() {
                       <div className="game-achievement-body">
                         <p className="game-achievement-desc">{item.description}</p>
                         <span className="game-achievement-desc">
-                          {item.isUnlocked ? `???????${item.unlockedAt ? `: ${new Date(item.unlockedAt).toLocaleString()}` : ""}` : "?? ???????"}
+                          {item.isUnlocked ? `Unlocked${item.unlockedAt ? `: ${new Date(item.unlockedAt).toLocaleString()}` : ""}` : "Locked"}
                         </span>
                       </div>
                     </div>
@@ -3080,8 +3080,8 @@ export default function App() {
         <div className="achievements-modal-overlay" onClick={() => setSectionMenuOpen(false)}>
           <Card className="achievements-modal" onClick={(event) => event.stopPropagation()}>
             <div className="achievements-modal-header">
-              <h2>{mainBottomTab === "network" ? "????" : "??????"}</h2>
-              <Button variant="secondary" data-variant="soft" onClick={() => setSectionMenuOpen(false)}>???????</Button>
+              <h2>{mainBottomTab === "network" ? "Text" : "Text"}</h2>
+              <Button variant="secondary" data-variant="soft" onClick={() => setSectionMenuOpen(false)}>Text</Button>
             </div>
             <div className="achievements-modal-content">
               {mainBottomTab === "network" && (
@@ -3090,7 +3090,7 @@ export default function App() {
                     isHost={Boolean(profile && roomState?.hostUserId === profile.userId)}
                     roomId={roomId}
                     roomStatus={roomStatus}
-                    hostName={roomState ? roomMemberName(roomState.hostUserId) : (profile?.displayName || "—")}
+                    hostName={roomState ? roomMemberName(roomState.hostUserId) : (profile?.displayName || "â€”")}
                     playersCount={roomPlayerIds.length}
                     spectatorsCount={roomState?.spectators.length || 0}
                     latencyMs={networkLatencyMs}
@@ -3132,7 +3132,7 @@ export default function App() {
                           </div>
                           <div className="friend-actions">
                             <Button variant="ghost" disabled={!f.online || !roomId} onClick={() => void onInvite(f.userId)}>{t("app.invite")}</Button>
-                            <Button variant="ghost" disabled={!f.inGame || !f.roomId || Boolean(roomId && roomId !== f.roomId)} onClick={() => void onWatchFriend(f)}>????????</Button>
+                            <Button variant="ghost" disabled={!f.inGame || !f.roomId || Boolean(roomId && roomId !== f.roomId)} onClick={() => void onWatchFriend(f)}>Text</Button>
                           </div>
                         </div>
                       ))}
@@ -3148,11 +3148,11 @@ export default function App() {
       {deleteGameTarget && (
         <div className="cover-editor-overlay" onClick={() => setDeleteGameTarget(null)}>
           <Card className="confirm-delete-modal" onClick={(event) => event.stopPropagation()}>
-            <h3>{`??????? ${deleteGameTarget.name}?`}</h3>
-            <p>???? ????? ??????? ?? ??????????.</p>
+            <h3>{`Text`}</h3>
+            <p>Text Text Text ?? Text.</p>
             <div className="cover-editor-actions">
-              <Button variant="ghost" data-variant="soft" onClick={() => setDeleteGameTarget(null)}>??????</Button>
-              <Button variant="danger" data-variant="danger" onClick={() => { void onConfirmDeleteGame(); }}>???????</Button>
+              <Button variant="ghost" data-variant="soft" onClick={() => setDeleteGameTarget(null)}>Text</Button>
+              <Button variant="danger" data-variant="danger" onClick={() => { void onConfirmDeleteGame(); }}>Text</Button>
             </div>
           </Card>
         </div>
@@ -3310,20 +3310,20 @@ export default function App() {
       {xpModalOpen && (
         <div className="cover-editor-overlay" onClick={() => setXpModalOpen(false)}>
           <Card className="cover-editor-modal xp-modal" onClick={(event) => event.stopPropagation()}>
-            <h3>???????? ? ????</h3>
+            <h3>Text ? Text</h3>
             <div className="xp-summary">
               <div className="xp-summary-main">
                 <strong>Lv.{profileLevel.level}</strong>
                 <span>Total XP: {profileXp}</span>
               </div>
-              <span className="xp-next-level">?? ?????????? ??????: {profileLevel.next - profileLevel.current} XP</span>
+              <span className="xp-next-level">?? Text Text: {profileLevel.next - profileLevel.current} XP</span>
             </div>
             <div className="level-progress-bar">
               <span style={{ width: `${profileLevel.progress}%` }} />
             </div>
             <div className="xp-sections">
               <div className="xp-section">
-                <h4>?? ??? ??? ????</h4>
+                <h4>XP by category</h4>
                 <div className="achievements-list">
                   {xpBreakdown.map((entry) => (
                     <div key={entry.id} className="achievement-item unlocked">
@@ -3334,7 +3334,7 @@ export default function App() {
                 </div>
               </div>
               <div className="xp-section">
-                <h4>?????????? ({unlockedAchievements}/{achievements.length})</h4>
+                <h4>Text ({unlockedAchievements}/{achievements.length})</h4>
                 <div className="achievements-list">
                   {achievements.map((item) => (
                     <div key={item.id} className={`achievement-item ${item.unlocked ? "unlocked" : "locked"}`}>
@@ -3346,7 +3346,7 @@ export default function App() {
               </div>
             </div>
             <div className="cover-editor-actions">
-              <Button variant="ghost" onClick={() => setXpModalOpen(false)}>???????</Button>
+              <Button variant="ghost" onClick={() => setXpModalOpen(false)}>Text</Button>
             </div>
           </Card>
         </div>
@@ -3367,6 +3367,10 @@ export default function App() {
     </div>
   );
 }
+
+
+
+
 
 
 

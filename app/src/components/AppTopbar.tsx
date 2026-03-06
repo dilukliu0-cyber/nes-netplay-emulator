@@ -5,10 +5,10 @@ type ConnectionState = "connecting" | "connected" | "reconnecting" | "disconnect
 type NetworkHealth = "offline" | "good" | "degraded";
 
 function connectionLabel(state: ConnectionState): string {
-  if (state === "connecting") return "Подключение...";
-  if (state === "reconnecting") return "Переподключение...";
-  if (state === "disconnected") return "Офлайн";
-  return "Онлайн";
+  if (state === "connecting") return "Connecting...";
+  if (state === "reconnecting") return "Reconnecting...";
+  if (state === "disconnected") return "Offline";
+  return "Online";
 }
 
 function healthClass(health: NetworkHealth): string {
@@ -26,13 +26,13 @@ export function AppTopbar(props: {
   const { roomStatus, networkHealth, connectionState, onOpenSettings } = props;
   return (
     <Card className="topbar">
-      <span className="app-title topbar-title">nes netplay online</span>
+      <span className="app-title topbar-title">nes netplay online 4.1</span>
       <div className="topbar-network">
         <span className={`topbar-network-dot ${healthClass(networkHealth)}`} />
         <span className="topbar-network-text">{connectionLabel(connectionState)}</span>
         <span className="topbar-room-status" title={roomStatus}>{roomStatus}</span>
       </div>
-      <Button variant="secondary" data-action="settings-open" className="with-bow" onClick={onOpenSettings}>Настройки</Button>
+      <Button variant="secondary" data-action="settings-open" className="with-bow" onClick={onOpenSettings}>Settings</Button>
     </Card>
   );
 }
