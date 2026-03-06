@@ -56,8 +56,8 @@
   },
   "build": {
     "appId": "com.mvp.nesnetplay2",
-    "productName": "nes netplay 4",
-    "artifactName": "nes netplay 4 Setup ${version}.${ext}",
+    "productName": "nes netplay online",
+    "artifactName": "nes netplay online Setup ${version}.${ext}",
     "files": [
       "dist/renderer/**/*",
       "dist-electron/**/*",
@@ -89,7 +89,7 @@
     },
     "win": {
       "target": "nsis",
-      "executableName": "nes netplay 4",
+      "executableName": "nes netplay online",
       "icon": "build/icon.ico"
     },
     "nsis": {
@@ -110,3 +110,4 @@
     ]
   }
 }
+

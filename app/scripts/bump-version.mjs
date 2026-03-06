@@ -19,16 +19,17 @@ const displayVersion = `${major}.${String(nextPatch).padStart(2, "0")}`;
 
 pkg.version = nextVersion;
 pkg.build = pkg.build || {};
-pkg.build.productName = `NES Emulator ${displayVersion}`;
-pkg.build.artifactName = `NES Emulator Setup ${displayVersion}.\${ext}`;
+pkg.build.productName = `nes netplay online ${displayVersion}`;
+pkg.build.artifactName = `nes netplay online Setup ${displayVersion}.\${ext}`;
 pkg.build.extraMetadata = {
   ...(pkg.build.extraMetadata || {}),
   displayVersion
 };
 pkg.build.win = {
   ...(pkg.build.win || {}),
-  executableName: `NES Emulator ${displayVersion}`
+  executableName: `nes netplay online ${displayVersion}`
 };
 
 fs.writeFileSync(packageJsonPath, `${JSON.stringify(pkg, null, 2)}\n`, "utf8");
 console.log(`Version bumped: ${nextVersion} (display ${displayVersion})`);
+

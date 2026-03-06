@@ -26,7 +26,7 @@ export function AppTopbar(props: {
   const { roomStatus, networkHealth, connectionState, onOpenSettings } = props;
   return (
     <Card className="topbar">
-      <span className="app-title topbar-title">3.online</span>
+      <span className="app-title topbar-title">nes netplay online</span>
       <div className="topbar-network">
         <span className={`topbar-network-dot ${healthClass(networkHealth)}`} />
         <span className="topbar-network-text">{connectionLabel(connectionState)}</span>
@@ -36,3 +36,4 @@ export function AppTopbar(props: {
     </Card>
   );
 }
+

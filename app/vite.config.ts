@@ -7,7 +7,7 @@ const packageJsonPath = path.resolve(__dirname, "package.json");
 const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf-8")) as { version: string };
 const [majorRaw, , patchRaw] = packageJson.version.split(".");
 const displayVersion = `${Number(majorRaw) || 1}.${String(Number(patchRaw) || 0).padStart(2, "0")}`;
-const appDisplayName = `NES Emulator ${displayVersion}`;
+const appDisplayName = `nes netplay online ${displayVersion}`;
 
 export default defineConfig({
   base: "./",
@@ -24,3 +24,4 @@ export default defineConfig({
     port: 5173
   }
 });
+

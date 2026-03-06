@@ -1,4 +1,4 @@
-﻿import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import { Controller, NES } from "jsnes";
 import { SocialClient } from "./core/socialClient";
@@ -16,6 +16,9 @@ import { SidebarLibrary } from "./components/SidebarLibrary";
 import { NetplayHeader } from "./components/NetplayHeader";
 import { AppTopbar } from "./components/AppTopbar";
 import { GameMetaStats } from "./components/GameMetaStats";
+import { InGameRoomChatPanel } from "./components/InGameRoomChatPanel";
+import { StreamClientView } from "./components/StreamClientView";
+import type { NetplayConfig, RoomChatMessage } from "./netplay/types";
 import { applyTheme } from "./theme/themeManager";
 import { getGameData as getRetroGameData, pickGameImage } from "./services/raService";
 import heroSideGif from "./assets/giffffffffff.gif";
@@ -44,25 +47,6 @@ type GameMode = "solo" | "room";
 type MainBottomTab = "network" | "friends";
 type ControlAction = keyof ControlSettings;
 type SettingsCategory = "account" | "server" | "controls" | "audio" | "about";
-type NetplayConfig = {
-  enabled: boolean;
-  social: SocialClient;
-  roomId: string;
-  localUserId: string;
-  hostUserId: string;
-  localPlayer: 1 | 2;
-  transport: "lockstep" | "stream";
-  isSpectator?: boolean;
-  streamPeerUserId?: string;
-};
-type RoomChatMessage = {
-  id: string;
-  roomId: string;
-  fromUserId: string;
-  fromDisplayName: string;
-  text: string;
-  createdAt: string;
-};
 
 const defaultControls: ControlSettings = {
   up: "ArrowUp",
@@ -187,7 +171,6 @@ const INPUT_BIT_B = 1 << 5;
 const INPUT_BIT_START = 1 << 6;
 const INPUT_BIT_SELECT = 1 << 7;
 const LOCKSTEP_INPUT_DELAY_FRAMES = 2;
-const LOCKSTEP_KEYFRAME_INTERVAL_FRAMES = 15;
 const COVER_OUTPUT_WIDTH = 640;
 const COVER_OUTPUT_HEIGHT = 360;
 const AVATAR_OUTPUT_SIZE = 512;
@@ -446,7 +429,13 @@ function GameView(props: {
     });
     nesRef.current = nes;
 
-    nes.loadROM(bytesToBinaryString(b64ToBytes(romBase64)));
+    try {
+      nes.loadROM(bytesToBinaryString(b64ToBytes(romBase64)));
+    } catch {
+      onToast("Failed to load netplay ROM");
+      onExit();
+      return () => undefined;
+    }
 
     const map: Record<string, number> = {
       [controls.up]: Controller.BUTTON_UP,
@@ -488,14 +477,11 @@ function GameView(props: {
     let localInputState = 0;
     let previousLocalAppliedState = 0;
     let previousRemoteAppliedState = 0;
-    let lastRemoteKnownState = 0;
     let currentFrame = 0;
     let plannedLocalFrame = 0;
     const localStateByFrame = new Map<number, number>();
     const remoteStateByFrame = new Map<number, number>();
     let remoteStreamInputState = 0;
-    let lastSentLocalState = 0;
-    let lastSentLocalFrame = -1;
 
     const applyMaskToPlayer = (player: number, previousMask: number, nextMask: number): number => {
       for (const item of bitToButton) {
@@ -527,7 +513,7 @@ function GameView(props: {
         if (payload.fromUserId === netplay!.localUserId) {
           return;
         }
-        lastRemoteKnownState = payload.state;
+
         remoteStateByFrame.set(payload.frame, payload.state);
       });
     }
@@ -616,12 +602,7 @@ function GameView(props: {
       if (isLockstepNetplay) {
         while (plannedLocalFrame <= currentFrame + LOCKSTEP_INPUT_DELAY_FRAMES) {
           localStateByFrame.set(plannedLocalFrame, localInputState);
-          const forceKeyframe = plannedLocalFrame - lastSentLocalFrame >= LOCKSTEP_KEYFRAME_INTERVAL_FRAMES;
-          if (localInputState !== lastSentLocalState || forceKeyframe) {
-            netplay!.social.sendNetplayInput(netplay!.roomId, plannedLocalFrame, localInputState);
-            lastSentLocalState = localInputState;
-            lastSentLocalFrame = plannedLocalFrame;
-          }
+          netplay!.social.sendNetplayInput(netplay!.roomId, plannedLocalFrame, localInputState);
           plannedLocalFrame += 1;
         }
 
@@ -629,7 +610,11 @@ function GameView(props: {
         while (frameAccumulatorMs >= frameDurationMs && steps < 2) {
           frameAccumulatorMs -= frameDurationMs;
           const localFrameState = localStateByFrame.get(currentFrame) ?? previousLocalAppliedState;
-          const remoteFrameState = remoteStateByFrame.get(currentFrame) ?? lastRemoteKnownState;
+          const hasRemoteFrameState = remoteStateByFrame.has(currentFrame);
+          if (!hasRemoteFrameState && currentFrame >= LOCKSTEP_INPUT_DELAY_FRAMES) {
+            break;
+          }
+          const remoteFrameState = remoteStateByFrame.get(currentFrame) ?? previousRemoteAppliedState;
 
           previousLocalAppliedState = applyMaskToPlayer(localPlayer, previousLocalAppliedState, localFrameState);
           previousRemoteAppliedState = applyMaskToPlayer(remotePlayer, previousRemoteAppliedState, remoteFrameState);
@@ -776,10 +761,16 @@ function GameView(props: {
       return;
     }
     try {
+      try {
       nes.loadROM(bytesToBinaryString(b64ToBytes(romBase64)));
-      onToast("Игра перезапущена");
     } catch {
-      onToast("Не удалось перезапустить игру");
+      onToast("Failed to load netplay ROM");
+      onExit();
+      return () => undefined;
+    }
+      onToast("???? ????????????");
+    } catch {
+      onToast("?? ??????? ????????????? ????");
     }
   }
 
@@ -921,7 +912,7 @@ function GameView(props: {
             <h3>{t("app.gameMenuTitle")}</h3>
             <div className="in-game-menu-actions">
               <Button variant="secondary" onClick={() => setMenuOpen(false)}>{t("app.gameMenuContinue")}</Button>
-              <Button variant="secondary" onClick={() => restartGame()}>Начать заново</Button>
+              <Button variant="secondary" onClick={() => restartGame()}>?????? ??????</Button>
               <Button variant="secondary" onClick={() => { onToggleAudio(); }}>{audioEnabled ? t("app.gameMenuSoundOn") : t("app.gameMenuSoundOff")}</Button>
               {showRoomPauseAction && <Button variant="secondary" onClick={() => onToggleRoomPause()}>{roomPauseLabel}</Button>}
               <Button variant="secondary" onClick={() => { setMenuOpen(false); onOpenSettings(); }}>{t("app.gameMenuSettings")}</Button>
@@ -934,14 +925,14 @@ function GameView(props: {
                   {slotPreviewById[slot]?.screenshot ? (
                     <img src={slotPreviewById[slot].screenshot} alt={`Slot ${slot}`} className="save-slot-preview" />
                   ) : (
-                    <div className="save-slot-preview empty">Пусто</div>
+                    <div className="save-slot-preview empty">?????</div>
                   )}
                   <div className="save-slot-meta">
-                    {slotPreviewById[slot]?.savedAt ? new Date(slotPreviewById[slot].savedAt as string).toLocaleString() : "Нет сохранения"}
+                    {slotPreviewById[slot]?.savedAt ? new Date(slotPreviewById[slot].savedAt as string).toLocaleString() : "??? ??????????"}
                   </div>
                   <div className="save-slot-actions">
-                    <Button variant="secondary" onClick={() => saveState(slot)}>Сохранить</Button>
-                    <Button variant="secondary" onClick={() => loadState(slot)}>Загрузить</Button>
+                    <Button variant="secondary" onClick={() => saveState(slot)}>?????????</Button>
+                    <Button variant="secondary" onClick={() => loadState(slot)}>?????????</Button>
                   </div>
                 </Card>
               ))}
@@ -952,327 +943,6 @@ function GameView(props: {
         </div>
       )}
     </div>
-  );
-}
-
-function StreamClientView(props: {
-  game: GameRecord;
-  controls: ControlSettings;
-  netplay: NetplayConfig;
-  paused: boolean;
-  pauseButtonLabel: string;
-  pauseInfo?: string;
-  audioEnabled: boolean;
-  onToggleAudio: () => void;
-  onTogglePause: () => void;
-  showRoomPauseAction: boolean;
-  roomPauseLabel: string;
-  onToggleRoomPause: () => void;
-  onVisualReady: () => void;
-  onOpenSettings: () => void;
-  onExit: () => void;
-  onToast: (message: string) => void;
-  showInGameChat: boolean;
-  inGameChatSide: "left" | "right";
-  roomChatMessages: RoomChatMessage[];
-  roomChatInput: string;
-  onRoomChatInput: (value: string) => void;
-  onSendRoomChat: () => void;
-  localUserId?: string;
-}) {
-  const {
-    game, controls, netplay, paused, pauseButtonLabel, pauseInfo, audioEnabled, onToggleAudio, onTogglePause, showRoomPauseAction, roomPauseLabel, onToggleRoomPause, onVisualReady, onOpenSettings, onExit, onToast,
-    showInGameChat, inGameChatSide, roomChatMessages, roomChatInput, onRoomChatInput, onSendRoomChat, localUserId
-  } = props;
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const visualReadyReportedRef = useRef(false);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuOpenRef = useRef(false);
-  const pausedRef = useRef(paused);
-
-  useEffect(() => {
-    menuOpenRef.current = menuOpen;
-  }, [menuOpen]);
-  useEffect(() => {
-    pausedRef.current = paused;
-  }, [paused]);
-  useEffect(() => {
-    visualReadyReportedRef.current = false;
-  }, [netplay.roomId]);
-  useEffect(() => {
-    if (paused) {
-      setMenuOpen(false);
-    }
-  }, [paused]);
-
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) {
-      return;
-    }
-    const markReady = () => {
-      if (visualReadyReportedRef.current) {
-        return;
-      }
-      visualReadyReportedRef.current = true;
-      onVisualReady();
-    };
-    video.addEventListener("loadeddata", markReady);
-    video.addEventListener("playing", markReady);
-    return () => {
-      video.removeEventListener("loadeddata", markReady);
-      video.removeEventListener("playing", markReady);
-    };
-  }, [onVisualReady]);
-
-  useEffect(() => {
-    if (!netplay.streamPeerUserId) {
-      return;
-    }
-
-    const pc = new RTCPeerConnection({
-      iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
-    });
-    let guestRemoteDescriptionSet = false;
-    let handshakeCompleted = false;
-    const guestPendingCandidates: RTCIceCandidateInit[] = [];
-
-    const flushGuestPendingCandidates = async () => {
-      if (!guestRemoteDescriptionSet || !guestPendingCandidates.length) {
-        return;
-      }
-      while (guestPendingCandidates.length) {
-        const candidate = guestPendingCandidates.shift();
-        if (!candidate) {
-          continue;
-        }
-        await pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => undefined);
-      }
-    };
-
-    pc.ontrack = (event) => {
-      const [stream] = event.streams;
-      if (videoRef.current && stream) {
-        videoRef.current.srcObject = stream;
-        if (!visualReadyReportedRef.current) {
-          visualReadyReportedRef.current = true;
-          onVisualReady();
-        }
-      }
-    };
-
-    pc.onicecandidate = (event) => {
-      if (!event.candidate) {
-        return;
-      }
-      netplay.social.sendStreamSignal(netplay.roomId, netplay.streamPeerUserId!, {
-        type: "candidate",
-        candidate: event.candidate.toJSON()
-      });
-    };
-
-    netplay.social.onStreamSignal((payload) => {
-      if (payload.roomId !== netplay.roomId || payload.fromUserId !== netplay.streamPeerUserId) {
-        return;
-      }
-      const signal = payload.signal as { type?: string; sdp?: string; candidate?: RTCIceCandidateInit };
-      if (!signal || typeof signal !== "object") {
-        return;
-      }
-
-      if (signal.type === "offer" && signal.sdp) {
-        void pc.setRemoteDescription(new RTCSessionDescription({ type: "offer", sdp: signal.sdp }))
-          .then(async () => {
-            guestRemoteDescriptionSet = true;
-            await flushGuestPendingCandidates();
-            const answer = await pc.createAnswer();
-            await pc.setLocalDescription(answer);
-            netplay.social.sendStreamSignal(netplay.roomId, netplay.streamPeerUserId!, answer);
-            handshakeCompleted = true;
-          })
-          .catch(() => onToast("Failed to start stream"));
-        return;
-      }
-
-      if (signal.type === "candidate" && signal.candidate) {
-        if (!guestRemoteDescriptionSet) {
-          guestPendingCandidates.push(signal.candidate);
-          return;
-        }
-        void pc.addIceCandidate(new RTCIceCandidate(signal.candidate)).catch(() => undefined);
-      }
-    });
-
-    netplay.social.sendStreamSignal(netplay.roomId, netplay.streamPeerUserId, { type: "ready" });
-    const readyRetryId = window.setInterval(() => {
-      if (handshakeCompleted) {
-        return;
-      }
-      netplay.social.sendStreamSignal(netplay.roomId, netplay.streamPeerUserId!, { type: "ready" });
-    }, 1500);
-    const readyRetryStopId = window.setTimeout(() => {
-      window.clearInterval(readyRetryId);
-    }, 20000);
-
-    return () => {
-      netplay.social.onStreamSignal(() => undefined);
-      window.clearInterval(readyRetryId);
-      window.clearTimeout(readyRetryStopId);
-      pc.close();
-    };
-  }, [netplay, onToast, onVisualReady]);
-
-  useEffect(() => {
-    if (netplay.isSpectator) {
-      return;
-    }
-    const keyToBit: Record<string, number> = {
-      [controls.up]: INPUT_BIT_UP,
-      [controls.down]: INPUT_BIT_DOWN,
-      [controls.left]: INPUT_BIT_LEFT,
-      [controls.right]: INPUT_BIT_RIGHT,
-      [controls.a]: INPUT_BIT_A,
-      [controls.b]: INPUT_BIT_B,
-      [controls.start]: INPUT_BIT_START,
-      [controls.select]: INPUT_BIT_SELECT
-    };
-
-    let localInputState = 0;
-    const pushInput = () => netplay.social.sendStreamInput(netplay.roomId, localInputState);
-
-    const down = (event: KeyboardEvent) => {
-      if (pausedRef.current) return;
-      if (event.code === "Escape") {
-        event.preventDefault();
-        setMenuOpen((prev) => !prev);
-        return;
-      }
-      if (menuOpenRef.current) return;
-      const bit = keyToBit[event.code];
-      if (bit === undefined) {
-        return;
-      }
-      event.preventDefault();
-      localInputState |= bit;
-      pushInput();
-    };
-
-    const up = (event: KeyboardEvent) => {
-      if (pausedRef.current) return;
-      const bit = keyToBit[event.code];
-      if (bit === undefined) {
-        return;
-      }
-      event.preventDefault();
-      localInputState &= ~bit;
-      pushInput();
-    };
-
-    addEventListener("keydown", down);
-    addEventListener("keyup", up);
-    addEventListener("blur", pushInput);
-
-    return () => {
-      localInputState = 0;
-      pushInput();
-      removeEventListener("keydown", down);
-      removeEventListener("keyup", up);
-      removeEventListener("blur", pushInput);
-    };
-  }, [controls, netplay, onExit]);
-
-  return (
-    <div className="game-view-root">
-      <div className="game-surface scale-fit">
-        <video ref={videoRef} className="game-canvas pixels-smooth" autoPlay playsInline muted />
-      </div>
-      <div className="replay-controls">
-        <Button variant="secondary" onClick={onExit}>Exit</Button>
-        <span className="replay-meta">Streaming mode: {game.name}{netplay.isSpectator ? " (spectator)" : ""}</span>
-      </div>
-      {showInGameChat && (
-        <InGameRoomChatPanel
-          side={inGameChatSide}
-          messages={roomChatMessages}
-          input={roomChatInput}
-          onInput={onRoomChatInput}
-          onSend={onSendRoomChat}
-          localUserId={localUserId}
-        />
-      )}
-      {menuOpen && (
-        <div className="in-game-menu-overlay" onClick={() => setMenuOpen(false)}>
-          <Card className="in-game-menu" onClick={(event) => event.stopPropagation()}>
-            <h3>{t("app.gameMenuTitle")}</h3>
-            <div className="in-game-menu-actions">
-              <Button variant="secondary" onClick={() => setMenuOpen(false)}>{t("app.gameMenuContinue")}</Button>
-              <Button variant="secondary" onClick={() => { onToggleAudio(); }}>{audioEnabled ? t("app.gameMenuSoundOn") : t("app.gameMenuSoundOff")}</Button>
-              {showRoomPauseAction && <Button variant="secondary" onClick={() => onToggleRoomPause()}>{roomPauseLabel}</Button>}
-              <Button variant="secondary" onClick={() => { setMenuOpen(false); onOpenSettings(); }}>{t("app.gameMenuSettings")}</Button>
-              <Button variant="danger" onClick={onExit}>{t("app.gameMenuExit")}</Button>
-            </div>
-            {pauseInfo && <p className="replay-meta">{pauseInfo}</p>}
-          </Card>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function InGameRoomChatPanel(props: {
-  side: "left" | "right";
-  messages: RoomChatMessage[];
-  input: string;
-  onInput: (value: string) => void;
-  onSend: () => void;
-  localUserId?: string;
-}) {
-  const { side, messages, input, onInput, onSend, localUserId } = props;
-  const listRef = useRef<HTMLDivElement | null>(null);
-  const stickToBottomRef = useRef(true);
-  const visibleMessages = messages.slice(-80);
-
-  useEffect(() => {
-    const list = listRef.current;
-    if (!list) return;
-    if (!stickToBottomRef.current) return;
-    list.scrollTop = list.scrollHeight;
-  }, [visibleMessages.length]);
-
-  return (
-    <Card className={`ingame-chat-panel ingame-chat-${side}`}>
-      <div className="ingame-chat-title">Room chat</div>
-      <div
-        ref={listRef}
-        className="ingame-chat-list"
-        onScroll={() => {
-          const list = listRef.current;
-          if (!list) return;
-          const nearBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 24;
-          stickToBottomRef.current = nearBottom;
-        }}
-      >
-        {visibleMessages.map((message) => (
-          <div key={message.id} className={`ingame-chat-line ${localUserId && message.fromUserId === localUserId ? "mine" : ""}`}>
-            <strong>{message.fromDisplayName}:</strong> {message.text}
-          </div>
-        ))}
-        {visibleMessages.length === 0 && <div className="empty-hint">No messages yet</div>}
-      </div>
-      <div className="ingame-chat-input">
-        <Input
-          value={input}
-          onChange={(event) => onInput(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key !== "Enter") return;
-            event.preventDefault();
-            onSend();
-          }}
-          placeholder="Message"
-        />
-        <Button variant="primary" onClick={onSend}>Send</Button>
-      </div>
-    </Card>
   );
 }
 
@@ -1389,11 +1059,11 @@ export default function App() {
   }, [profileXp]);
   const achievements = useMemo(() => {
     const wins = [
-      { id: "first_game", title: "Первый картридж", desc: "Добавь первую игру", unlocked: games.length >= 1 },
-      { id: "collector", title: "Коллекционер", desc: "Добавь 10 игр", unlocked: games.length >= 10 },
-      { id: "one_hour", title: "Разогрев", desc: "Сыграй 1 час", unlocked: totalPlaySeconds >= 3600 },
-      { id: "marathon", title: "Ретро-марафон", desc: "Сыграй 10 часов", unlocked: totalPlaySeconds >= 36000 },
-      { id: "social", title: "В кругу друзей", desc: "Добавь 3 друзей", unlocked: friends.length >= 3 }
+      { id: "first_game", title: "?????? ????????", desc: "?????? ?????? ????", unlocked: games.length >= 1 },
+      { id: "collector", title: "????????????", desc: "?????? 10 ???", unlocked: games.length >= 10 },
+      { id: "one_hour", title: "????????", desc: "?????? 1 ???", unlocked: totalPlaySeconds >= 3600 },
+      { id: "marathon", title: "?????-???????", desc: "?????? 10 ?????", unlocked: totalPlaySeconds >= 36000 },
+      { id: "social", title: "? ????? ??????", desc: "?????? 3 ??????", unlocked: friends.length >= 3 }
     ];
     return wins;
   }, [friends.length, games.length, totalPlaySeconds]);
@@ -1401,15 +1071,15 @@ export default function App() {
   const xpBreakdown = useMemo(() => {
     const playMinutes = Math.floor(totalPlaySeconds / 60);
     return [
-      { id: "playtime", label: "За время в игре", value: playMinutes },
-      { id: "library", label: "За игры в библиотеке", value: games.length * 30 },
-      { id: "friends", label: "За друзей", value: friends.length * 10 }
+      { id: "playtime", label: "?? ????? ? ????", value: playMinutes },
+      { id: "library", label: "?? ???? ? ??????????", value: games.length * 30 },
+      { id: "friends", label: "?? ??????", value: friends.length * 10 }
     ];
   }, [friends.length, games.length, totalPlaySeconds]);
   const selectedRomExt = useMemo(() => (selectedGame ? getRomExt(selectedGame.path) : ""), [selectedGame]);
   const isGamePaused = settingsOpen || manualPause || remotePause;
   const pauseButtonLabel = manualPause ? t("app.gameMenuResume") : t("app.gameMenuPause");
-  const roomPauseLabel = remotePause ? "Снять паузу для всех" : "Пауза для всех";
+  const roomPauseLabel = remotePause ? "????? ????? ??? ????" : "????? ??? ????";
   const pauseInfo = useMemo(() => {
     const lines: string[] = [];
     if (settingsOpen) lines.push(t("app.gamePausedBySettings"));
@@ -1444,7 +1114,7 @@ export default function App() {
   const roomMemberIds = roomState?.members || [];
   const roomPlayerIds = roomState ? roomState.members.filter((id) => !roomState.spectators.includes(id)) : [];
   const networkQuality = useMemo(() => {
-    if (networkLatencyMs === null) return "—";
+    if (networkLatencyMs === null) return "�";
     if (networkLatencyMs <= 80) return "Excellent";
     if (networkLatencyMs <= 140) return "Good";
     if (networkLatencyMs <= 220) return "Fair";
@@ -1479,10 +1149,10 @@ export default function App() {
     return covers[selectedGame.id] || "";
   }, [covers, selectedGame, selectedGameRaCover]);
   const friendPresenceText = (friend: FriendItem): string => {
-    if (!friend.online) return "оффлайн";
-    if (friend.inGame) return `играет в "${friend.gameName || "неизвестная игра"}"`;
-    if (friend.roomId) return `в комнате ${friend.roomId}`;
-    return "онлайн";
+    if (!friend.online) return "???????";
+    if (friend.inGame) return `?????? ? "${friend.gameName || "??????????? ????"}"`;
+    if (friend.roomId) return `? ??????? ${friend.roomId}`;
+    return "??????";
   };
 
   const displayNameByUserId = useMemo(() => {
@@ -1572,6 +1242,8 @@ export default function App() {
       }
       const sessionCheck = canAcceptNetplaySession({
         gameId: nextRoom.session.gameId,
+        gameName: nextRoom.session.gameName,
+        platform: nextRoom.session.platform,
         emulatorId: nextRoom.session.emulatorId,
         romHash: nextRoom.session.romHash
       });
@@ -1580,7 +1252,7 @@ export default function App() {
         return;
       }
       if (!nextRoom.session.romBase64) {
-        setToast("Невозможно восстановить сессию: ROM не передан сервером");
+        setToast("?????????? ???????????? ??????: ROM ?? ??????? ????????");
         return;
       }
       setActiveSession({
@@ -1599,7 +1271,7 @@ export default function App() {
       });
       setManualPause(false);
       setRemotePause(false);
-      setToast("Сессия восстановлена после переподключения");
+      setToast("?????? ????????????? ????? ???????????????");
       return;
     }
     if (localProfile.userId === nextRoom.hostUserId) {
@@ -1631,7 +1303,7 @@ export default function App() {
     });
     setManualPause(false);
     setRemotePause(false);
-    setToast("Сессия восстановлена после переподключения");
+    setToast("?????? ????????????? ????? ???????????????");
   };
 
   const restoreRoomMembership = async (social: SocialClient) => {
@@ -1682,7 +1354,7 @@ export default function App() {
       if (state === "reconnecting") {
         setNetworkHealth("degraded");
         if (roomIdRef.current) {
-          setRoomStatus("Переподключение к комнате...");
+          setRoomStatus("??????????????? ? ???????...");
         }
         return;
       }
@@ -1760,7 +1432,7 @@ export default function App() {
           }
         };
       });
-      setToast("Netplay-сессия запущена");
+      setToast("Netplay-?????? ????????");
     });
     social.onStreamStart((payload) => {
       if (!payload.roomId) {
@@ -1839,7 +1511,7 @@ export default function App() {
       setActiveSession((prev) => (prev?.netplay?.roomId === payload.roomId ? null : prev));
       setRemotePause(false);
       setManualPause(false);
-      setToast("Хост вышел из игры");
+      setToast("???? ????? ?? ????");
     });
     social.onRoomChat((message) => {
       if (roomIdRef.current !== message.roomId) {
@@ -1957,7 +1629,7 @@ export default function App() {
       if (sessionVisualReady) {
         return;
       }
-      setToast("Черный экран: первый кадр не получен. Проверь подключение и попробуй переподключиться.");
+      setToast("?????? ?????: ?????? ???? ?? ???????. ??????? ??????????? ? ???????? ????????????????.");
     }, 12000);
     return () => window.clearTimeout(timeoutId);
   }, [activeSession, sessionVisualReady]);
@@ -1978,7 +1650,7 @@ export default function App() {
     setGames((prev) => prev.map((g) => (g.id === updated.id ? updated : g)));
   };
 
-  const canAcceptNetplaySession = (payload: { gameId?: string; emulatorId?: string; romHash?: string }): { ok: true; game: GameRecord } | { ok: false; reason: string } => {
+  const canAcceptNetplaySession = (payload: { gameId?: string; gameName?: string; platform?: string; emulatorId?: string; romHash?: string }): { ok: true; game: GameRecord } | { ok: false; reason: string } => {
     const gameId = String(payload.gameId || "").trim();
     const romHash = String(payload.romHash || "").trim().toLowerCase();
 
@@ -1989,18 +1661,45 @@ export default function App() {
     if (!localGame && gameId) {
       localGame = gamesRef.current.find((game) => game.id === gameId);
     }
+
+    // Fallback to payload metadata so the guest can launch from host-shared ROM.
     if (!localGame) {
-      return { ok: false, reason: "Игра из комнаты не найдена в локальной библиотеке" };
+      return {
+        ok: true,
+        game: resolveNetplayGame(
+          {
+            gameId,
+            gameName: payload.gameName,
+            platform: payload.platform,
+            emulatorId: payload.emulatorId
+          },
+          gamesRef.current
+        )
+      };
     }
+
     if (payload.emulatorId && localGame.emulatorId !== payload.emulatorId) {
-      return { ok: false, reason: `Несовпадение эмулятора: комната ${String(payload.emulatorId).toUpperCase()}, локально ${localGame.emulatorId.toUpperCase()}` };
+      return {
+        ok: true,
+        game: {
+          ...localGame,
+          emulatorId: payload.emulatorId as EmulatorId,
+          platform:
+            payload.emulatorId === "snes"
+              ? "SNES"
+              : payload.emulatorId === "gb"
+                ? "GB"
+                : payload.emulatorId === "gba"
+                  ? "GBA"
+                  : payload.emulatorId === "md"
+                    ? "MD"
+                    : "NES"
+        }
+      };
     }
-    if (romHash && localGame.sha256.toLowerCase() !== romHash) {
-      return { ok: false, reason: "Несовпадение ROM (sha256). Подключение отклонено." };
-    }
+
     return { ok: true, game: localGame };
   };
-
   const loadCover = async (gameId: string) => {
     const dataUrl = await window.bridge.covers.getCoverDataUrl(gameId).catch(() => null);
     setCovers((prev) => {
@@ -2200,7 +1899,7 @@ export default function App() {
       .catch((error: unknown) => {
         if (cancelled) return;
         setRaData(null);
-        setRaError(error instanceof Error ? error.message : "Не удалось загрузить достижения");
+        setRaError(error instanceof Error ? error.message : "?? ??????? ????????? ??????????");
       })
       .finally(() => {
         if (!cancelled) {
@@ -2360,7 +2059,7 @@ export default function App() {
       setControls(next);
       void window.bridge.saveControls({ [waitingAction]: event.code });
       setWaitingAction(null);
-      setToast(`Клавиша ${waitingAction.toUpperCase()} обновлена`);
+      setToast(`??????? ${waitingAction.toUpperCase()} ?????????`);
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -2395,18 +2094,18 @@ export default function App() {
     const parsed = Number(trimmed);
     const nextRetroId = trimmed ? (Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : null) : null;
     if (trimmed && !nextRetroId) {
-      setToast("RetroAchievements ID должен быть положительным числом");
+      setToast("RetroAchievements ID ?????? ???? ????????????? ??????");
       return;
     }
     const updated = await window.bridge.updateGameRetroId(selectedGame.id, nextRetroId).catch(() => null);
     if (!updated) {
-      setToast("Не удалось сохранить RetroAchievements ID");
+      setToast("?? ??????? ????????? RetroAchievements ID");
       return;
     }
     applyGameUpdate(updated);
     setRaIdEditorOpen(false);
     setRaReloadKey((prev) => prev + 1);
-    setToast("RetroAchievements ID сохранен");
+    setToast("RetroAchievements ID ????????");
   };
 
   const runRoomLaunchPreflight = async (
@@ -2415,29 +2114,29 @@ export default function App() {
     localProfile: Profile
   ): Promise<{ ok: true; room: RoomState } | { ok: false; reason: string }> => {
     if (!roomId) {
-      return { ok: false, reason: "Сначала создай или подключись к комнате" };
+      return { ok: false, reason: "??????? ?????? ??? ?????????? ? ???????" };
     }
     const connected = await social.connect().then(() => true).catch(() => false);
     if (!connected) {
-      return { ok: false, reason: "Нет подключения к серверу. Повтори запуск." };
+      return { ok: false, reason: "??? ??????????? ? ???????. ??????? ??????." };
     }
     const pingOk = await social.request("ping", { roomId }).then(() => true).catch(() => false);
     if (!pingOk) {
-      return { ok: false, reason: "Сервер комнаты не отвечает" };
+      return { ok: false, reason: "?????? ??????? ?? ????????" };
     }
     const remoteRoom = await social.getRoomState(roomId).catch(() => null);
     if (!remoteRoom) {
-      return { ok: false, reason: "Не удалось получить состояние комнаты" };
+      return { ok: false, reason: "?? ??????? ???????? ????????? ???????" };
     }
     const inRoom = remoteRoom.members.includes(localProfile.userId) || remoteRoom.spectators.includes(localProfile.userId);
     if (!inRoom) {
-      return { ok: false, reason: "Ты больше не в этой комнате. Подключись заново." };
+      return { ok: false, reason: "?? ?????? ?? ? ???? ???????. ?????????? ??????." };
     }
     if (remoteRoom.hostUserId !== localProfile.userId) {
       return { ok: false, reason: t("app.hostOnlyStart") };
     }
     if (remoteRoom.session && remoteRoom.session.gameId !== game.id) {
-      return { ok: false, reason: "В комнате уже запущена другая сессия" };
+      return { ok: false, reason: "? ??????? ??? ???????? ?????? ??????" };
     }
     return { ok: true, room: remoteRoom };
   };
@@ -2455,14 +2154,14 @@ export default function App() {
     }
     if (mode === "room") {
       if (!roomId || !socialRef.current || !profile) {
-        setToast("Сначала создай или подключись к комнате");
+        setToast("??????? ?????? ??? ?????????? ? ???????");
         return;
       }
       const social = socialRef.current;
       const preflight = await runRoomLaunchPreflight(selectedGame, social, profile);
       if (!preflight.ok) {
         setToast(preflight.reason);
-        if (preflight.reason.includes("подключ")) {
+        if (preflight.reason.includes("???????")) {
           setNetworkHealth("offline");
         }
         return;
@@ -2487,7 +2186,7 @@ export default function App() {
         }
       });
       if (requestedStreamMode) {
-        setToast("Stream mode временно отключен: запускаем стабильный lockstep.");
+        setToast("Stream mode ???????? ????????: ????????? ?????????? lockstep.");
       }
       const started = await social.startNetplay(
         roomId,
@@ -2575,7 +2274,7 @@ export default function App() {
   const onInvite = async (friendUserId: string) => {
     if (!socialRef.current) return;
     if (!roomId || !roomState) {
-      setToast("Сначала создай комнату");
+      setToast("??????? ?????? ???????");
       return;
     }
     const gameId = roomState.gameId || selectedGame?.id;
@@ -2588,11 +2287,11 @@ export default function App() {
 
   const onWatchFriend = async (friend: FriendItem) => {
     if (!friend.roomId) {
-      setToast("У друга нет активной комнаты");
+      setToast("? ????? ??? ???????? ???????");
       return;
     }
     if (roomId && roomId !== friend.roomId) {
-      setToast("Сначала выйди из текущей комнаты");
+      setToast("??????? ????? ?? ??????? ???????");
       return;
     }
     try {
@@ -2601,9 +2300,9 @@ export default function App() {
       setRoomIdInput(room.roomId);
       setRoomStatus(`${t("app.roomConnected")} (${room.roomId})`);
       setMode("room");
-      setToast(`Подключен как зритель к ${friend.displayName}`);
+      setToast(`????????? ??? ??????? ? ${friend.displayName}`);
     } catch {
-      setToast("Не удалось подключиться к просмотру");
+      setToast("?? ??????? ???????????? ? ?????????");
     }
   };
 
@@ -2633,10 +2332,10 @@ export default function App() {
         await social.refreshFriends().catch(() => undefined);
       }
 
-      setToast("Подключено к серверу");
+      setToast("?????????? ? ???????");
     } catch (error) {
       setNetworkHealth("offline");
-      setToast(error instanceof Error ? error.message : "Не удалось подключиться к серверу");
+      setToast(error instanceof Error ? error.message : "?? ??????? ???????????? ? ???????");
     } finally {
       setNetworkBusy(false);
     }
@@ -2672,7 +2371,7 @@ export default function App() {
     }
     const updated = await window.bridge.covers.removeCover(selectedGame.id).catch(() => null);
     if (!updated) {
-      setToast("Не удалось удалить обложку");
+      setToast("?? ??????? ??????? ???????");
       return;
     }
     applyGameUpdate(updated);
@@ -2681,7 +2380,7 @@ export default function App() {
       delete next[selectedGame.id];
       return next;
     });
-    setToast("Локальная обложка удалена");
+    setToast("????????? ??????? ???????");
   };
 
   const onCoverFileSelected = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -3064,7 +2763,7 @@ export default function App() {
             className="avatar-wrap avatar-trigger"
             type="button"
             onClick={() => setXpModalOpen(true)}
-            title="Профиль"
+            title="???????"
           >
             {profile?.avatarDataUrl ? (
               <img src={profile.avatarDataUrl} alt={profile.displayName || "Avatar"} className="avatar profile-avatar-image" />
@@ -3134,7 +2833,7 @@ export default function App() {
                     event.preventDefault();
                     void onRemoveCover();
                   }}
-                  title="ЛКМ: выбрать обложку, ПКМ: удалить локальную обложку"
+                  title="???: ??????? ???????, ???: ??????? ????????? ???????"
                   onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault();
@@ -3163,18 +2862,18 @@ export default function App() {
                   <div className="game-achievement-head">
                     <div className="achievement-head-actions">
                       <button type="button" className="achievements-open-link" onClick={() => setAchievementsModalOpen(true)}>
-                        Достижения
+                        ??????????
                       </button>
                       <button
                         type="button"
                         className={`ra-id-icon-btn ${raIdEditorOpen ? "active" : ""}`}
-                        title="Изменить RA Game ID"
+                        title="???????? RA Game ID"
                         onClick={() => setRaIdEditorOpen((prev) => !prev)}
                       >
                         <img src={achievementsIcon} alt="RA ID" />
                       </button>
                     </div>
-                    <span>{raData ? `${raData.unlockedAchievements}/${raData.totalAchievements}` : "—"}</span>
+                    <span>{raData ? `${raData.unlockedAchievements}/${raData.totalAchievements}` : "�"}</span>
                   </div>
                   {raIdEditorOpen && (
                     <div className="ra-id-inline-editor">
@@ -3184,20 +2883,20 @@ export default function App() {
                         placeholder="RetroAchievements Game ID"
                       />
                       <Button variant="secondary" data-variant="soft" onClick={() => { void onSaveRetroGameId(); }}>
-                        Сохранить
+                        ?????????
                       </Button>
                     </div>
                   )}
                   {!selectedGame.retroAchievementsGameId && (
-                    <p className="game-achievement-desc">Укажи RA Game ID, чтобы видеть достижения.</p>
+                    <p className="game-achievement-desc">????? RA Game ID, ????? ?????? ??????????.</p>
                   )}
                   {selectedGame.retroAchievementsGameId && raLoading && (
-                    <p className="game-achievement-desc">Загрузка достижений...</p>
+                    <p className="game-achievement-desc">???????? ??????????...</p>
                   )}
                   {selectedGame.retroAchievementsGameId && !raLoading && raError && (
                     <div className="game-achievement-actions">
                       <p className="game-achievement-desc">{raError}</p>
-                      <Button variant="secondary" data-variant="soft" onClick={() => setRaReloadKey((prev) => prev + 1)}>Обновить</Button>
+                      <Button variant="secondary" data-variant="soft" onClick={() => setRaReloadKey((prev) => prev + 1)}>????????</Button>
                     </div>
                   )}
                   {selectedGame.retroAchievementsGameId && !raLoading && !raError && raData && raPreviewAchievements.length > 0 && (
@@ -3224,14 +2923,14 @@ export default function App() {
                     data-variant={mainBottomTab === "network" ? undefined : "soft"}
                     onClick={() => setMainBottomTab("network")}
                   >
-                    Сеть
+                    ????
                   </Button>
                   <Button
                     variant={mainBottomTab === "friends" ? "primary" : "secondary"}
                     data-variant={mainBottomTab === "friends" ? undefined : "soft"}
                     onClick={() => setMainBottomTab("friends")}
                   >
-                    Друзья
+                    ??????
                   </Button>
                 </div>
                 <Button
@@ -3239,7 +2938,7 @@ export default function App() {
                   data-variant="soft"
                   className="section-expand-btn"
                   onClick={() => setSectionMenuOpen(true)}
-                  title="Открыть на весь экран"
+                  title="??????? ?? ???? ?????"
                 >
                   ?
                 </Button>
@@ -3251,7 +2950,7 @@ export default function App() {
                       isHost={Boolean(profile && roomState?.hostUserId === profile.userId)}
                       roomId={roomId}
                       roomStatus={roomStatus}
-                      hostName={roomState ? roomMemberName(roomState.hostUserId) : (profile?.displayName || "—")}
+                      hostName={roomState ? roomMemberName(roomState.hostUserId) : (profile?.displayName || "�")}
                       playersCount={roomPlayerIds.length}
                       spectatorsCount={roomState?.spectators.length || 0}
                       latencyMs={networkLatencyMs}
@@ -3291,7 +2990,7 @@ export default function App() {
                         </div>
                         <div className="friend-actions">
                           <Button variant="ghost" disabled={!f.online || !roomId} onClick={() => void onInvite(f.userId)}>{t("app.invite")}</Button>
-                          <Button variant="ghost" disabled={!f.inGame || !f.roomId || Boolean(roomId && roomId !== f.roomId)} onClick={() => void onWatchFriend(f)}>Смотреть</Button>
+                          <Button variant="ghost" disabled={!f.inGame || !f.roomId || Boolean(roomId && roomId !== f.roomId)} onClick={() => void onWatchFriend(f)}>????????</Button>
                         </div>
                       </div>
                     ))}
@@ -3309,12 +3008,12 @@ export default function App() {
         <div className="achievements-modal-overlay" onClick={() => setAchievementsModalOpen(false)}>
           <Card className="achievements-modal" onClick={(event) => event.stopPropagation()}>
             <div className="achievements-modal-header">
-              <h2>Достижения</h2>
-              <Button variant="secondary" data-variant="soft" onClick={() => setAchievementsModalOpen(false)}>Закрыть</Button>
+              <h2>??????????</h2>
+              <Button variant="secondary" data-variant="soft" onClick={() => setAchievementsModalOpen(false)}>???????</Button>
             </div>
             <div className="achievements-modal-summary">
-              <span>{selectedGame?.name || "Игра"}</span>
-              <span>{raData ? `${raData.unlockedAchievements}/${raData.totalAchievements}` : "—"}</span>
+              <span>{selectedGame?.name || "????"}</span>
+              <span>{raData ? `${raData.unlockedAchievements}/${raData.totalAchievements}` : "�"}</span>
               <span>{raData ? `${raData.totalPoints} pts` : ""}</span>
             </div>
 
@@ -3326,32 +3025,32 @@ export default function App() {
                     data-variant={raSort === "lockedFirst" ? undefined : "soft"}
                     onClick={() => setRaSort("lockedFirst")}
                   >
-                    Сначала неоткрытые
+                    ??????? ??????????
                   </Button>
                   <Button
                     variant={raSort === "unlockedFirst" ? "primary" : "secondary"}
                     data-variant={raSort === "unlockedFirst" ? undefined : "soft"}
                     onClick={() => setRaSort("unlockedFirst")}
                   >
-                    Сначала открытые
+                    ??????? ????????
                   </Button>
                 </div>
                 {!selectedGame?.retroAchievementsGameId && (
                   <Card className="game-achievement-item">
-                    <strong>Для этой игры нет RetroAchievements ID</strong>
-                    <p className="game-achievement-desc">Укажи RA Game ID на карточке выбранной игры.</p>
+                    <strong>??? ???? ???? ??? RetroAchievements ID</strong>
+                    <p className="game-achievement-desc">????? RA Game ID ?? ???????? ????????? ????.</p>
                   </Card>
                 )}
                 {selectedGame?.retroAchievementsGameId && raLoading && (
                   <Card className="game-achievement-item">
-                    <strong>Загрузка...</strong>
+                    <strong>????????...</strong>
                   </Card>
                 )}
                 {selectedGame?.retroAchievementsGameId && !raLoading && raError && (
                   <Card className="game-achievement-item">
-                    <strong>Ошибка загрузки достижений</strong>
+                    <strong>?????? ???????? ??????????</strong>
                     <p className="game-achievement-desc">{raError}</p>
-                    <Button variant="secondary" onClick={() => setRaReloadKey((prev) => prev + 1)}>Обновить</Button>
+                    <Button variant="secondary" onClick={() => setRaReloadKey((prev) => prev + 1)}>????????</Button>
                   </Card>
                 )}
                 {selectedGame?.retroAchievementsGameId && !raLoading && !raError && sortedRaAchievements.map((item) => (
@@ -3365,7 +3064,7 @@ export default function App() {
                       <div className="game-achievement-body">
                         <p className="game-achievement-desc">{item.description}</p>
                         <span className="game-achievement-desc">
-                          {item.isUnlocked ? `Открыто${item.unlockedAt ? `: ${new Date(item.unlockedAt).toLocaleString()}` : ""}` : "Не открыто"}
+                          {item.isUnlocked ? `???????${item.unlockedAt ? `: ${new Date(item.unlockedAt).toLocaleString()}` : ""}` : "?? ???????"}
                         </span>
                       </div>
                     </div>
@@ -3381,8 +3080,8 @@ export default function App() {
         <div className="achievements-modal-overlay" onClick={() => setSectionMenuOpen(false)}>
           <Card className="achievements-modal" onClick={(event) => event.stopPropagation()}>
             <div className="achievements-modal-header">
-              <h2>{mainBottomTab === "network" ? "Сеть" : "Друзья"}</h2>
-              <Button variant="secondary" data-variant="soft" onClick={() => setSectionMenuOpen(false)}>Закрыть</Button>
+              <h2>{mainBottomTab === "network" ? "????" : "??????"}</h2>
+              <Button variant="secondary" data-variant="soft" onClick={() => setSectionMenuOpen(false)}>???????</Button>
             </div>
             <div className="achievements-modal-content">
               {mainBottomTab === "network" && (
@@ -3391,7 +3090,7 @@ export default function App() {
                     isHost={Boolean(profile && roomState?.hostUserId === profile.userId)}
                     roomId={roomId}
                     roomStatus={roomStatus}
-                    hostName={roomState ? roomMemberName(roomState.hostUserId) : (profile?.displayName || "—")}
+                    hostName={roomState ? roomMemberName(roomState.hostUserId) : (profile?.displayName || "�")}
                     playersCount={roomPlayerIds.length}
                     spectatorsCount={roomState?.spectators.length || 0}
                     latencyMs={networkLatencyMs}
@@ -3433,7 +3132,7 @@ export default function App() {
                           </div>
                           <div className="friend-actions">
                             <Button variant="ghost" disabled={!f.online || !roomId} onClick={() => void onInvite(f.userId)}>{t("app.invite")}</Button>
-                            <Button variant="ghost" disabled={!f.inGame || !f.roomId || Boolean(roomId && roomId !== f.roomId)} onClick={() => void onWatchFriend(f)}>Смотреть</Button>
+                            <Button variant="ghost" disabled={!f.inGame || !f.roomId || Boolean(roomId && roomId !== f.roomId)} onClick={() => void onWatchFriend(f)}>????????</Button>
                           </div>
                         </div>
                       ))}
@@ -3449,11 +3148,11 @@ export default function App() {
       {deleteGameTarget && (
         <div className="cover-editor-overlay" onClick={() => setDeleteGameTarget(null)}>
           <Card className="confirm-delete-modal" onClick={(event) => event.stopPropagation()}>
-            <h3>{`Удалить ${deleteGameTarget.name}?`}</h3>
-            <p>Игра будет удалена из библиотеки.</p>
+            <h3>{`??????? ${deleteGameTarget.name}?`}</h3>
+            <p>???? ????? ??????? ?? ??????????.</p>
             <div className="cover-editor-actions">
-              <Button variant="ghost" data-variant="soft" onClick={() => setDeleteGameTarget(null)}>Отмена</Button>
-              <Button variant="danger" data-variant="danger" onClick={() => { void onConfirmDeleteGame(); }}>Удалить</Button>
+              <Button variant="ghost" data-variant="soft" onClick={() => setDeleteGameTarget(null)}>??????</Button>
+              <Button variant="danger" data-variant="danger" onClick={() => { void onConfirmDeleteGame(); }}>???????</Button>
             </div>
           </Card>
         </div>
@@ -3611,20 +3310,20 @@ export default function App() {
       {xpModalOpen && (
         <div className="cover-editor-overlay" onClick={() => setXpModalOpen(false)}>
           <Card className="cover-editor-modal xp-modal" onClick={(event) => event.stopPropagation()}>
-            <h3>Прогресс и опыт</h3>
+            <h3>???????? ? ????</h3>
             <div className="xp-summary">
               <div className="xp-summary-main">
                 <strong>Lv.{profileLevel.level}</strong>
                 <span>Total XP: {profileXp}</span>
               </div>
-              <span className="xp-next-level">До следующего уровня: {profileLevel.next - profileLevel.current} XP</span>
+              <span className="xp-next-level">?? ?????????? ??????: {profileLevel.next - profileLevel.current} XP</span>
             </div>
             <div className="level-progress-bar">
               <span style={{ width: `${profileLevel.progress}%` }} />
             </div>
             <div className="xp-sections">
               <div className="xp-section">
-                <h4>За что дан опыт</h4>
+                <h4>?? ??? ??? ????</h4>
                 <div className="achievements-list">
                   {xpBreakdown.map((entry) => (
                     <div key={entry.id} className="achievement-item unlocked">
@@ -3635,7 +3334,7 @@ export default function App() {
                 </div>
               </div>
               <div className="xp-section">
-                <h4>Достижения ({unlockedAchievements}/{achievements.length})</h4>
+                <h4>?????????? ({unlockedAchievements}/{achievements.length})</h4>
                 <div className="achievements-list">
                   {achievements.map((item) => (
                     <div key={item.id} className={`achievement-item ${item.unlocked ? "unlocked" : "locked"}`}>
@@ -3647,7 +3346,7 @@ export default function App() {
               </div>
             </div>
             <div className="cover-editor-actions">
-              <Button variant="ghost" onClick={() => setXpModalOpen(false)}>Закрыть</Button>
+              <Button variant="ghost" onClick={() => setXpModalOpen(false)}>???????</Button>
             </div>
           </Card>
         </div>
@@ -3668,6 +3367,19 @@ export default function App() {
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

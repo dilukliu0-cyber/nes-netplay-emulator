@@ -2,60 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { WebSocketServer, WebSocket } from "ws";
 import { v4 as uuidv4 } from "uuid";
-
-type Json = Record<string, unknown>;
-
-interface UserRecord {
-  userId: string;
-  displayName: string;
-  friendCode: string;
-  friends: string[];
-  avatarDataUrl?: string;
-}
-
-interface InviteRecord {
-  inviteId: string;
-  fromUserId: string;
-  toUserId: string;
-  roomId: string;
-  gameId: string;
-  createdAt: string;
-}
-
-interface RoomRecord {
-  roomId: string;
-  hostUserId: string;
-  gameId: string;
-  members: string[];
-  spectators: string[];
-  locked: boolean;
-  readyByUserId: string[];
-  chat: Array<{
-    id: string;
-    roomId: string;
-    fromUserId: string;
-    text: string;
-    createdAt: string;
-  }>;
-  session?: {
-    mode: "lockstep" | "stream";
-    gameId: string;
-    gameName: string;
-    platform: string;
-    emulatorId?: string;
-    romHash?: string;
-    protocolVersion?: string;
-    coreVersion?: string;
-    romBase64?: string;
-    startedAt: string;
-  };
-}
-
-interface IncomingMessage {
-  type: string;
-  requestId?: string;
-  payload?: Json;
-}
+import type { IncomingMessage, InviteRecord, RoomRecord, UserRecord } from "./types";
 
 const PORT = Number(process.env.SIGNALING_PORT || 8787);
 const dataDir = path.join(__dirname, "data");
@@ -537,6 +484,7 @@ wss.on("connection", (ws) => {
             gameId: room.session.gameId,
             gameName: room.session.gameName,
             platform: room.session.platform,
+            emulatorId: room.session.emulatorId,
             hostUserId: room.hostUserId
           });
         }
@@ -784,6 +732,7 @@ wss.on("connection", (ws) => {
       const gameId = String(payload.gameId || "").trim();
       const gameName = String(payload.gameName || "").trim() || "Netplay";
       const platform = String(payload.platform || "").trim() || "NES";
+      const emulatorId = String(payload.emulatorId || "").trim().toLowerCase();
       const room = rooms.get(roomId);
       if (!room) {
         sendResponse(ws, msg.requestId, false, undefined, "Room not found");
@@ -813,6 +762,7 @@ wss.on("connection", (ws) => {
         gameId,
         gameName,
         platform,
+        emulatorId: emulatorId || undefined,
         startedAt: new Date().toISOString()
       };
       emitRoomUpdate(room);
@@ -822,6 +772,7 @@ wss.on("connection", (ws) => {
         gameId,
         gameName,
         platform,
+        emulatorId: room.session.emulatorId,
         hostUserId: room.hostUserId
       });
       sendResponse(ws, msg.requestId, true, { started: true });
@@ -1197,4 +1148,7 @@ wss.on("connection", (ws) => {
 });
 
 console.log(`Signaling server started on ws://localhost:${PORT}`);
+
+
+
 

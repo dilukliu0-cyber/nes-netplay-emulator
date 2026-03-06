@@ -4,7 +4,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { rcedit } from "rcedit";
 
 const distDir = path.resolve(process.cwd(), "dist");
-const unpackedExe = path.join(distDir, "win-unpacked", "NES Emulator 2.exe");
+const unpackedExe = path.join(distDir, "win-unpacked", "nes netplay online.exe");
 const iconPath = path.resolve(process.cwd(), "build", "icon.ico");
 const maxAttempts = 6;
 
@@ -115,7 +115,7 @@ for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       "file-version": "2.0.0",
       "product-version": "2.0.0",
       "version-string": {
-        ProductName: "NES Emulator 2",
+        ProductName: "nes netplay online",
         FileDescription: "NES emulator with online netplay support"
       }
     });
@@ -146,3 +146,4 @@ for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
   cleanupNsisArtifacts();
   sleep(4000);
 }
+

@@ -18,7 +18,7 @@ if (!portableExe) {
   throw new Error("Cannot find built portable exe in app/dist");
 }
 
-const target = path.join(projectRoot, "NES Emulator.exe");
+const target = path.join(projectRoot, "nes netplay online.exe");
 const iconPath = path.join(appRoot, "build", "icon.ico");
 try {
   execFileSync(
@@ -32,7 +32,7 @@ try {
   );
 } catch (error) {
   if (error && typeof error === "object") {
-    throw new Error("Cannot update NES Emulator.exe because it is locked. Close the app and run npm run dist:one again.");
+    throw new Error("Cannot update nes netplay online.exe because it is locked. Close the app and run npm run dist:one again.");
   }
   throw error;
 }
@@ -44,7 +44,7 @@ if (fs.existsSync(iconPath)) {
       "file-version": "2.0.0",
       "product-version": "2.0.0",
       "version-string": {
-        ProductName: "NES Emulator 2",
+        ProductName: "nes netplay online",
         FileDescription: "NES emulator with online netplay support"
       }
     });
@@ -53,3 +53,4 @@ if (fs.existsSync(iconPath)) {
   }
 }
 console.log(`Updated root exe: ${target}`);
+

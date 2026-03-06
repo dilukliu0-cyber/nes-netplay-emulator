@@ -13,145 +13,25 @@ import * as path from "path";
 import * as crypto from "crypto";
 import { v4 as uuidv4 } from "uuid";
 import WebSocket from "ws";
-
-type Platform = "NES" | "SNES" | "GB" | "GBA" | "MD";
-type EmulatorId = "nes" | "snes" | "gb" | "gba" | "md";
-
-type ControlAction = "up" | "down" | "left" | "right" | "a" | "b" | "start" | "select";
-type VideoFps = 30 | 60 | 120;
-type ReplayQuality = "720p" | "1080p";
-type ReplayFps = 30 | 60;
-type ReplayFormat = "webm";
-
-interface ControlSettings {
-  up: string;
-  down: string;
-  left: string;
-  right: string;
-  a: string;
-  b: string;
-  start: string;
-  select: string;
-}
-
-interface AudioSettings {
-  enabled: boolean;
-  volume: number;
-  latency: number;
-}
-
-interface VideoSettings {
-  targetFps: VideoFps;
-  smoothing: boolean;
-}
-
-interface NetworkSettings {
-  signalingUrl: string;
-  netplayMode: "lockstep" | "stream";
-}
-
-interface ReplaySettings {
-  enabled: boolean;
-  hotkey: string;
-  prebufferSeconds: number;
-  quality: ReplayQuality;
-  fps: ReplayFps;
-  format: ReplayFormat;
-  saveFolder: string;
-}
-
-interface UiSettings {
-  controlPreset: "keyboard" | "gamepad";
-  libraryShowPlatformBadges: boolean;
-  libraryEmulatorFilter: "all" | EmulatorId;
-  theme: "blue" | "pink" | "steam";
-  retroAchievementsUsername: string;
-  inviteSoundEnabled: boolean;
-}
-
-interface GameRecord {
-  id: string;
-  name: string;
-  path: string;
-  platform: Platform;
-  emulatorId: EmulatorId;
-  sha256: string;
-  addedAt: string;
-  totalPlayTime: number;
-  lastPlayedAt?: string;
-  coverFileName?: string;
-  hasCover?: boolean;
-  retroAchievementsGameId?: number;
-}
-
-interface RetroAchievement {
-  id: number;
-  title: string;
-  description: string;
-  points: number;
-  badgeUrl: string;
-  isUnlocked: boolean;
-  unlockedAt?: string;
-}
-
-interface RetroGameAchievements {
-  gameId: number;
-  gameTitle: string;
-  consoleName: string;
-  totalAchievements: number;
-  totalPoints: number;
-  unlockedAchievements: number;
-  images: {
-    icon?: string | null;
-    title?: string | null;
-    boxArt?: string | null;
-    inGame?: string | null;
-  };
-  achievements: RetroAchievement[];
-}
-
-interface RetroApiKeyStatus {
-  configured: boolean;
-  source: "env" | "secure-store" | "memory" | "none";
-  persistent: boolean;
-}
-
-interface Profile {
-  userId: string;
-  displayName: string;
-  friendCode: string;
-  avatarDataUrl?: string;
-}
-
-interface RoomState {
-  roomId: string;
-  gameId: string;
-  hostUserId: string;
-  members: string[];
-  spectators: string[];
-  locked: boolean;
-  readyByUserId: string[];
-  session?: {
-    mode: "lockstep" | "stream";
-    gameId: string;
-    gameName: string;
-    platform: string;
-    emulatorId?: string;
-    romHash?: string;
-    protocolVersion?: string;
-    coreVersion?: string;
-    romBase64?: string;
-    startedAt: string;
-  };
-}
-
-interface WsResponse {
-  type: "response";
-  requestId: string;
-  ok: boolean;
-  payload?: unknown;
-  error?: string;
-}
+import type {
+  AudioSettings,
+  ControlAction,
+  ControlSettings,
+  EmulatorId,
+  GameRecord,
+  NetworkSettings,
+  Platform,
+  Profile,
+  ReplaySettings,
+  RetroAchievement,
+  RetroApiKeyStatus,
+  RetroGameAchievements,
+  RoomState,
+  UiSettings,
+  VideoFps,
+  VideoSettings,
+  WsResponse
+} from "./types";
 
 function normalizeExt(ext: string): string {
   const trimmed = ext.trim().toLowerCase();
@@ -232,7 +112,7 @@ const defaultUiSettings: UiSettings = {
   inviteSoundEnabled: true
 };
 
-const appDisplayName = "3.online";
+const appDisplayName = "nes netplay online";
 
 function userDataPath(...parts: string[]): string {
   return path.join(app.getPath("userData"), ...parts);
@@ -1803,4 +1683,6 @@ ipcMain.handle("room:sendChat", async (_event, roomId: string, text: string): Pr
   await signalClient.request("room:chat:send", { roomId, text });
   return true;
 });
+
+
 
